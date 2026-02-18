@@ -40,6 +40,7 @@ const store = {
 };
 
 const callClaude = async (messages, system) => {
+  await new Promise(r => setTimeout(r, 1000));
   try {
     const geminiMessages = messages.map(m => ({
       role: m.role === "assistant" ? "model" : "user",
