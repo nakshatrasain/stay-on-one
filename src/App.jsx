@@ -40,26 +40,28 @@ const store = {
 };
 
 const callClaude = async (messages, system) => {
-  await new Promise(r => setTimeout(r, 1000));
   try {
-    const geminiMessages = messages.map(m => ({
-      role: m.role === "assistant" ? "model" : "user",
-      parts: [{ text: m.content }]
-    }));
+    const contents = [];
     if (system) {
-      geminiMessages.unshift({ role: "user", parts: [{ text: `System instructions: ${system}` }] });
-      geminiMessages.splice(1, 0, { role: "model", parts: [{ text: "Understood. I will follow these instructions." }] });
+      contents.push({ role: "user", parts: [{ text: system }] });
+      contents.push({ role: "model", parts: [{ text: "Understood." }] });
+    }
+    for (const m of messages) {
+      contents.push({
+        role: m.role === "assistant" ? "model" : "user",
+        parts: [{ text: m.content }]
+      });
     }
     const r = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${import.meta.env.VITE_GEMINI_KEY}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contents: geminiMessages }),
+        body: JSON.stringify({ contents }),
       }
     );
-   const d = await r.json();
-    console.log("Gemini response:", JSON.stringify(d));
+    const d = await r.json();
+    console.log("Gemini:", JSON.stringify(d).slice(0, 200));
     return d.candidates?.[0]?.content?.parts?.[0]?.text || "No response.";
   } catch { return "Connection error. Please try again."; }
 };
