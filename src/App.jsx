@@ -58,7 +58,8 @@ const callClaude = async (messages, system) => {
         body: JSON.stringify({ contents: geminiMessages }),
       }
     );
-    const d = await r.json();
+   const d = await r.json();
+    console.log("Gemini response:", JSON.stringify(d));
     return d.candidates?.[0]?.content?.parts?.[0]?.text || "No response.";
   } catch { return "Connection error. Please try again."; }
 };
