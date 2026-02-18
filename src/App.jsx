@@ -41,29 +41,31 @@ const store = {
 
 const callClaude = async (messages, system) => {
   try {
-    const contents = [];
-    if (system) {
-      contents.push({ role: "user", parts: [{ text: system }] });
-      contents.push({ role: "model", parts: [{ text: "Understood." }] });
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": import.meta.env.VITE_ANTHROPIC_KEY,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 1000,
+        system: system || "You are a helpful life coach assistant.",
+        messages: messages,
+      }),
+    });
+    const data = await response.json();
+    if (data.error) {
+      console.error("API error:", data.error.message);
+      return "I'm having trouble connecting right now. Please try again.";
     }
-    for (const m of messages) {
-      contents.push({
-        role: m.role === "assistant" ? "model" : "user",
-        parts: [{ text: m.content }]
-      });
-    }
-    const r = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${import.meta.env.VITE_GEMINI_KEY}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contents }),
-      }
-    );
-    const d = await r.json();
-    console.log("Gemini:", JSON.stringify(d).slice(0, 200));
-    return d.candidates?.[0]?.content?.parts?.[0]?.text || "No response.";
-  } catch { return "Connection error. Please try again."; }
+    return data.content?.[0]?.text || "No response received.";
+  } catch (err) {
+    console.error("Network error:", err);
+    return "Connection error. Please check your internet and try again.";
+  }
 };
 
 function getStreak(logs) {
@@ -144,8 +146,8 @@ function Coach({ userName, goals, scores, logs, lifeVision, currentPage }) {
       dashboard: "How can I help you stay focused today?",
     }[currentPage] || "How can I help?";
     const greeting = completedGoals.length === 0
-      ? `Hey ${userName || "there"} I'm Coach. Start by setting a goal in any life area and I'll help you think it through.`
-      : `Hey ${userName || "there"} I'm Coach — I know all ${completedGoals.length} of your goals. ${pageCtx}`;
+      ? `Hey ${userName || "there"}, I'm Coach. Start by setting a goal in any life area and I'll help you think it through.`
+      : `Hey ${userName || "there"}, I'm Coach — I know all ${completedGoals.length} of your goals. ${pageCtx}`;
     setMsgs([{ role: "assistant", content: greeting }]);
   }, [open]);
 
@@ -198,7 +200,7 @@ function Coach({ userName, goals, scores, logs, lifeVision, currentPage }) {
                 Always here for you
               </div>
             </div>
-            <button onClick={() => setOpen(false)} style={{ marginLeft: "auto", background: "none", border: "none", color: "#666", cursor: "pointer", fontSize: 18, lineHeight: 1 }}>x</button>
+            <button onClick={() => setOpen(false)} style={{ marginLeft: "auto", background: "none", border: "none", color: "#666", cursor: "pointer", fontSize: 20, lineHeight: 1 }}>×</button>
           </div>
           <div style={{ flex: 1, overflowY: "auto", padding: "14px", display: "flex", flexDirection: "column", gap: 10 }}>
             {msgs.map((m, i) => (
@@ -237,12 +239,12 @@ function Coach({ userName, goals, scores, logs, lifeVision, currentPage }) {
               placeholder="Ask Coach anything..."
               style={{ flex: 1, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 9, padding: "8px 13px", fontSize: 13, color: "#fff", fontFamily: "Georgia,serif", outline: "none" }} />
             <button onClick={send} disabled={!input.trim() || loading}
-              style={{ background: input.trim() ? "linear-gradient(135deg,#FFD700,#FF9500)" : "rgba(255,255,255,0.06)", border: "none", borderRadius: 9, padding: "8px 14px", fontSize: 15, color: input.trim() ? "#000" : "#555", cursor: input.trim() ? "pointer" : "default", transition: "all 0.2s" }}>-&gt;</button>
+              style={{ background: input.trim() ? "linear-gradient(135deg,#FFD700,#FF9500)" : "rgba(255,255,255,0.06)", border: "none", borderRadius: 9, padding: "8px 14px", fontSize: 15, color: input.trim() ? "#000" : "#555", cursor: input.trim() ? "pointer" : "default", transition: "all 0.2s" }}>→</button>
           </div>
         </div>
       )}
       <button onClick={() => setOpen(o => !o)} style={{ width: 52, height: 52, borderRadius: "50%", background: open ? "#1a1a1a" : "linear-gradient(135deg,#FFD700,#FF9500)", border: open ? "1px solid rgba(255,255,255,0.15)" : "none", cursor: "pointer", fontSize: 20, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: open ? "0 2px 12px rgba(0,0,0,0.5)" : "0 4px 20px rgba(255,215,0,0.4)", transition: "all 0.2s", color: open ? "#aaa" : "#000" }}>
-        {open ? "x" : "C"}
+        {open ? "×" : "C"}
       </button>
       <style>{`@keyframes coachBounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-4px)} }`}</style>
     </div>
@@ -255,7 +257,7 @@ function Nav({ tab, setTab, hasGoals, userName }) {
     : [["setup","Goals"]];
   return (
     <div style={{ position: "sticky", top: 0, zIndex: 100, height: 58, display: "flex", alignItems: "center", padding: "0 26px", gap: 4, background: "rgba(8,8,8,0.94)", backdropFilter: "blur(16px)", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
-      <span style={{ color: "#FFD700", fontSize: 17, marginRight: 14 }}>*</span>
+      <span style={{ color: "#FFD700", fontSize: 17, marginRight: 14 }}>★</span>
       <span style={{ fontSize: 15, color: "#fff", fontFamily: "Georgia,serif", marginRight: 22, whiteSpace: "nowrap" }}>Stay on One</span>
       {items.map(([id, label]) => (
         <button key={id} onClick={() => setTab(id)} style={{ background: "none", border: "none", borderBottom: tab === id ? "2px solid #FFD700" : "2px solid transparent", color: tab === id ? "#FFD700" : "#666", cursor: "pointer", fontSize: 13, fontFamily: "Georgia,serif", padding: "4px 10px", transition: "color 0.15s" }}>
@@ -268,22 +270,22 @@ function Nav({ tab, setTab, hasGoals, userName }) {
 }
 
 export default function App() {
-  const [loaded, setLoaded]         = useState(false);
-  const [tab, setTab]               = useState("setup");
-  const [activeId, setActiveId]     = useState(null);
-  const [userName, setUserName]     = useState("");
-  const [nameInput, setNameInput]   = useState("");
-  const [goals, setGoals]           = useState({});
-  const [scores, setScores]         = useState({});
-  const [logs, setLogs]             = useState({});
-  const [chats, setChats]           = useState({});
-  const [vision, setVision]         = useState("");
-  const [editGoal, setEditGoal]     = useState({ goal: "", metrics: "" });
-  const [ciNote, setCiNote]         = useState("");
-  const [ciMood, setCiMood]         = useState(3);
-  const [ciLoading, setCiLoading]   = useState(false);
-  const [ciFeedback, setCiFeedback] = useState("");
-  const [chatInput, setChatInput]   = useState("");
+  const [loaded, setLoaded]           = useState(false);
+  const [tab, setTab]                 = useState("setup");
+  const [activeId, setActiveId]       = useState(null);
+  const [userName, setUserName]       = useState("");
+  const [nameInput, setNameInput]     = useState("");
+  const [goals, setGoals]             = useState({});
+  const [scores, setScores]           = useState({});
+  const [logs, setLogs]               = useState({});
+  const [chats, setChats]             = useState({});
+  const [vision, setVision]           = useState("");
+  const [editGoal, setEditGoal]       = useState({ goal: "", metrics: "" });
+  const [ciNote, setCiNote]           = useState("");
+  const [ciMood, setCiMood]           = useState(3);
+  const [ciLoading, setCiLoading]     = useState(false);
+  const [ciFeedback, setCiFeedback]   = useState("");
+  const [chatInput, setChatInput]     = useState("");
   const [chatLoading, setChatLoading] = useState(false);
   const [visionLoading, setVisionLoading] = useState(false);
   const chatEndRef = useRef(null);
@@ -344,7 +346,7 @@ export default function App() {
     const nl = { ...logs, [activeId]: [...(logs[activeId] || []), entry] };
     const ns = { ...scores, [activeId]: newScore };
     setLogs(nl); setScores(ns);
-    setCiFeedback(`${clean}\n\n${delta >= 0 ? "+" : ""}${delta} pts -> ${newScore}/100`);
+    setCiFeedback(`${clean}\n\n${delta >= 0 ? "+" : ""}${delta} pts → ${newScore}/100`);
     setCiLoading(false); save({ logs: nl, scores: ns });
   };
 
@@ -385,7 +387,7 @@ export default function App() {
   if (!userName) return (
     <div style={{ minHeight: "100vh", background: "#080808", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "Georgia,serif" }}>
       <div style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 20, padding: 40, maxWidth: 420, width: "100%", margin: 20, display: "flex", flexDirection: "column", alignItems: "center", gap: 18, textAlign: "center" }}>
-        <div style={{ fontSize: 52, color: "#FFD700" }}>*</div>
+        <div style={{ fontSize: 52, color: "#FFD700" }}>★</div>
         <h1 style={{ fontSize: 34, fontWeight: 400, color: "#fff", margin: 0 }}>Stay on One</h1>
         <p style={{ color: "#888", fontSize: 15, lineHeight: 1.6, margin: 0 }}>One goal. Daily accountability. Compounding greatness.</p>
         <input style={{ width: "100%", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 10, padding: "13px 16px", fontSize: 16, color: "#fff", fontFamily: "Georgia,serif", outline: "none" }}
@@ -408,7 +410,7 @@ export default function App() {
       return (
         <div style={{ display: "flex", justifyContent: "center", padding: "36px 20px" }}>
           <div style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 18, padding: 34, maxWidth: 540, width: "100%", display: "flex", flexDirection: "column", gap: 16 }}>
-            <button onClick={() => setTab("setup")} style={{ background: "none", border: "none", color: "#666", cursor: "pointer", fontSize: 14, fontFamily: "Georgia,serif", padding: 0, textAlign: "left" }}>Back</button>
+            <button onClick={() => setTab("setup")} style={{ background: "none", border: "none", color: "#666", cursor: "pointer", fontSize: 14, fontFamily: "Georgia,serif", padding: 0, textAlign: "left" }}>← Back</button>
             <div style={{ fontSize: 32, color: c?.color }}>{c?.icon}</div>
             <h2 style={{ fontSize: 24, fontWeight: 400, color: c?.color, margin: 0 }}>{c?.name}</h2>
             <label style={{ fontSize: 11, color: "#666", letterSpacing: "0.1em", textTransform: "uppercase" }}>Your ONE long-term goal</label>
@@ -457,7 +459,7 @@ export default function App() {
         </div>
         {doneIds.length > 0 && (
           <button onClick={() => setTab("dashboard")} style={{ marginTop: 24, background: "#FFD700", color: "#000", border: "none", borderRadius: 9, padding: "12px 28px", fontSize: 15, fontFamily: "Georgia,serif", fontWeight: 700, cursor: "pointer" }}>
-            Go to Dashboard
+            Go to Dashboard →
           </button>
         )}
       </div>
@@ -481,7 +483,7 @@ export default function App() {
           </div>
           {needCheckin.length > 0 && (
             <div style={{ display: "flex", alignItems: "center", gap: 12, background: "rgba(255,215,0,0.07)", border: "1px solid rgba(255,215,0,0.2)", borderRadius: 10, padding: "12px 16px", marginBottom: 22 }}>
-              <span style={{ color: "#FFD700" }}>*</span>
+              <span style={{ color: "#FFD700" }}>★</span>
               <span style={{ fontSize: 14, color: "#ddd" }}>{needCheckin.length} goal{needCheckin.length > 1 ? "s" : ""} awaiting today's check-in</span>
               <button onClick={() => { setActiveId(needCheckin[0]); setCiNote(""); setCiMood(3); setCiFeedback(""); setTab("checkin"); }}
                 style={{ marginLeft: "auto", background: "rgba(255,215,0,0.15)", border: "1px solid rgba(255,215,0,0.3)", borderRadius: 7, padding: "6px 14px", fontSize: 13, color: "#FFD700", cursor: "pointer", fontFamily: "Georgia,serif" }}>
@@ -496,7 +498,7 @@ export default function App() {
               const logList = logs[id] || [];
               const logged = todayLogged(id);
               const last7 = logList.slice(-7);
-              const trend = last7.length ? (last7[last7.length-1].delta > 0 ? "up" : last7[last7.length-1].delta < 0 ? "down" : "-") : "-";
+              const trend = last7.length ? (last7[last7.length-1].delta > 0 ? "↑" : last7[last7.length-1].delta < 0 ? "↓" : "—") : "—";
               return (
                 <div key={id} style={{ background: "rgba(255,255,255,0.03)", border: `1px solid ${c?.color}33`, borderRadius: 16, padding: 20, display: "flex", flexDirection: "column", gap: 8 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -537,12 +539,12 @@ export default function App() {
           </div>
           {vision
             ? <div onClick={() => setTab("vision")} style={{ marginTop: 26, display: "flex", alignItems: "center", gap: 14, background: "rgba(255,215,0,0.05)", border: "1px solid rgba(255,215,0,0.15)", borderRadius: 12, padding: "15px 20px", cursor: "pointer" }}>
-                <span style={{ fontSize: 20, color: "#FFD700" }}>*</span>
+                <span style={{ fontSize: 20, color: "#FFD700" }}>★</span>
                 <div>
                   <div style={{ fontSize: 14, color: "#ddd" }}>Your Life Vision</div>
                   <div style={{ fontSize: 12, color: "#666" }}>Click to view or regenerate</div>
                 </div>
-                <span style={{ marginLeft: "auto", color: "#FFD700" }}>-&gt;</span>
+                <span style={{ marginLeft: "auto", color: "#FFD700" }}>→</span>
               </div>
             : doneIds.length > 0
               ? <button onClick={() => { setTab("vision"); generateVision(); }} style={{ marginTop: 26, background: "rgba(255,215,0,0.1)", border: "1px solid rgba(255,215,0,0.25)", borderRadius: 10, padding: "13px 26px", fontSize: 15, color: "#FFD700", cursor: "pointer", fontFamily: "Georgia,serif" }}>
@@ -559,12 +561,12 @@ export default function App() {
       const recent = (logs[activeId] || []).slice(-3).reverse();
       return (
         <div style={{ padding: "34px 26px", maxWidth: 1000, margin: "0 auto" }}>
-          <button onClick={() => setTab("dashboard")} style={{ background: "none", border: "none", color: "#666", cursor: "pointer", fontSize: 14, fontFamily: "Georgia,serif", padding: "0 0 18px", display: "block" }}>Back to Dashboard</button>
+          <button onClick={() => setTab("dashboard")} style={{ background: "none", border: "none", color: "#666", cursor: "pointer", fontSize: 14, fontFamily: "Georgia,serif", padding: "0 0 18px", display: "block" }}>← Back to Dashboard</button>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 310px", gap: 26, alignItems: "flex-start" }}>
             <div style={{ display: "flex", flexDirection: "column", gap: 15 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                 <span style={{ color: c?.color, fontSize: 26 }}>{c?.icon}</span>
-                <div><div style={{ color: c?.color, fontSize: 15 }}>{c?.name}</div><div style={{ fontSize: 12, color: "#666" }}>Daily check-in {todayStr()}</div></div>
+                <div><div style={{ color: c?.color, fontSize: 15 }}>{c?.name}</div><div style={{ fontSize: 12, color: "#666" }}>Daily check-in · {todayStr()}</div></div>
                 <div style={{ marginLeft: "auto", position: "relative", width: 62, height: 62 }}>
                   <Ring pct={sc(activeId)} color={c?.color || "#FFD700"} size={62} stroke={5} />
                   <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, color: c?.color }}>{sc(activeId)}</div>
@@ -578,9 +580,9 @@ export default function App() {
               <div>
                 <div style={{ fontSize: 11, color: "#666", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 8 }}>How are you feeling?</div>
                 <div style={{ display: "flex", gap: 8 }}>
-                  {[":(",":|",":)","=)","!"].map((emoji, i) => (
+                  {["😔","😐","🙂","😊","🔥"].map((emoji, i) => (
                     <button key={i} onClick={() => setCiMood(i+1)}
-                      style={{ flex: 1, border: `1px solid ${ciMood === i+1 ? (c?.color||"#FFD700") : "rgba(255,255,255,0.1)"}`, background: ciMood === i+1 ? `rgba(${hexRgb(c?.color||"#FFD700")},0.15)` : "rgba(255,255,255,0.04)", borderRadius: 8, padding: "9px 0", fontSize: 16, cursor: "pointer", color: "#fff" }}>
+                      style={{ flex: 1, border: `1px solid ${ciMood === i+1 ? (c?.color||"#FFD700") : "rgba(255,255,255,0.1)"}`, background: ciMood === i+1 ? `rgba(${hexRgb(c?.color||"#FFD700")},0.15)` : "rgba(255,255,255,0.04)", borderRadius: 8, padding: "9px 0", fontSize: 18, cursor: "pointer" }}>
                       {emoji}
                     </button>
                   ))}
@@ -626,7 +628,7 @@ export default function App() {
                       style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 0", cursor: "pointer", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
                       <span style={{ color: cc?.color }}>{cc?.icon}</span>
                       <span style={{ fontSize: 13, color: "#aaa" }}>{cc?.name}</span>
-                      {todayLogged(id) && <span style={{ fontSize: 11, color: "#7CE8A0", marginLeft: "auto" }}>done</span>}
+                      {todayLogged(id) && <span style={{ fontSize: 11, color: "#7CE8A0", marginLeft: "auto" }}>✓ done</span>}
                     </div>
                   );
                 })}
@@ -645,7 +647,7 @@ export default function App() {
       const s = sc(activeId);
       return (
         <div style={{ padding: "34px 26px", maxWidth: 900, margin: "0 auto" }}>
-          <button onClick={() => setTab("dashboard")} style={{ background: "none", border: "none", color: "#666", cursor: "pointer", fontSize: 14, fontFamily: "Georgia,serif", padding: "0 0 18px", display: "block" }}>Back to Dashboard</button>
+          <button onClick={() => setTab("dashboard")} style={{ background: "none", border: "none", color: "#666", cursor: "pointer", fontSize: 14, fontFamily: "Georgia,serif", padding: "0 0 18px", display: "block" }}>← Back to Dashboard</button>
           <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 30 }}>
             <span style={{ color: c?.color, fontSize: 28 }}>{c?.icon}</span>
             <div><h2 style={{ fontSize: 24, fontWeight: 400, color: "#fff", margin: "0 0 4px" }}>{c?.name} Progress</h2><p style={{ color: "#888", fontSize: 13, margin: 0 }}>{goals[activeId]?.goal}</p></div>
@@ -662,12 +664,12 @@ export default function App() {
               </div>
             ))}
           </div>
-          {logList.length === 0 && <div style={{ color: "#555", fontSize: 15, textAlign: "center", padding: "60px 0" }}>No logs yet.</div>}
+          {logList.length === 0 && <div style={{ color: "#555", fontSize: 15, textAlign: "center", padding: "60px 0" }}>No logs yet. Start your first check-in!</div>}
           {Object.keys(byMonth).sort().reverse().map(m => (
             <div key={m} style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 12, padding: 20, marginBottom: 12 }}>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
                 <div style={{ fontSize: 14, color: c?.color }}>{formatMonth(m)}</div>
-                <div style={{ fontSize: 13, color: "#888" }}>{byMonth[m].length} logs net {byMonth[m].reduce((a,l)=>a+l.delta,0)>=0?"+":""}{byMonth[m].reduce((a,l)=>a+l.delta,0)}</div>
+                <div style={{ fontSize: 13, color: "#888" }}>{byMonth[m].length} logs · net {byMonth[m].reduce((a,l)=>a+l.delta,0)>=0?"+":""}{byMonth[m].reduce((a,l)=>a+l.delta,0)}</div>
               </div>
               <div style={{ display: "flex", gap: 3, alignItems: "flex-end", height: 38, marginBottom: 12 }}>
                 {byMonth[m].map((l, i) => (
@@ -693,7 +695,7 @@ export default function App() {
       return (
         <div style={{ display: "flex", height: "calc(100vh - 58px)" }}>
           <div style={{ width: 240, borderRight: "1px solid rgba(255,255,255,0.07)", padding: 20, flexShrink: 0, overflowY: "auto" }}>
-            <button onClick={() => setTab("dashboard")} style={{ background: "none", border: "none", color: "#666", cursor: "pointer", fontSize: 14, fontFamily: "Georgia,serif", padding: "0 0 14px", display: "block" }}>Back</button>
+            <button onClick={() => setTab("dashboard")} style={{ background: "none", border: "none", color: "#666", cursor: "pointer", fontSize: 14, fontFamily: "Georgia,serif", padding: "0 0 14px", display: "block" }}>← Back</button>
             <div style={{ color: c?.color, fontSize: 24, marginBottom: 6 }}>{c?.icon}</div>
             <div style={{ fontSize: 14, color: c?.color, marginBottom: 8 }}>{c?.name}</div>
             <div style={{ fontSize: 12, color: "#777", lineHeight: 1.5, marginBottom: 14 }}>{goals[activeId]?.goal}</div>
@@ -742,7 +744,7 @@ export default function App() {
                 value={chatInput} onChange={e => setChatInput(e.target.value)}
                 onKeyDown={e => e.key === "Enter" && sendGoalChat()} />
               <button onClick={sendGoalChat} disabled={!chatInput.trim() || chatLoading}
-                style={{ background: c?.color || "#FFD700", border: "none", borderRadius: 9, padding: "10px 18px", fontSize: 16, color: "#000", cursor: "pointer" }}>Go</button>
+                style={{ background: c?.color || "#FFD700", border: "none", borderRadius: 9, padding: "10px 18px", fontSize: 16, color: "#000", cursor: "pointer" }}>→</button>
             </div>
           </div>
         </div>
@@ -824,11 +826,11 @@ export default function App() {
 
       return (
         <div style={{ padding: "34px 26px", maxWidth: 960, margin: "0 auto" }}>
-          <button onClick={() => setTab("dashboard")} style={{ background: "none", border: "none", color: "#666", cursor: "pointer", fontSize: 14, fontFamily: "Georgia,serif", padding: "0 0 18px", display: "block" }}>Back to Dashboard</button>
+          <button onClick={() => setTab("dashboard")} style={{ background: "none", border: "none", color: "#666", cursor: "pointer", fontSize: 14, fontFamily: "Georgia,serif", padding: "0 0 18px", display: "block" }}>← Back to Dashboard</button>
           <div style={{ textAlign: "center", marginBottom: 40 }}>
-            <div style={{ fontSize: 46, color: "#FFD700" }}>*</div>
-            <h2 style={{ fontSize: 30, fontWeight: 400, color: "#fff", margin: "12px 0 8px" }}>{userName} Life Vision</h2>
-            <p style={{ color: "#666", fontSize: 14, margin: 0 }}>Synthesized from {doneIds.length} goals {totalLogs} check-ins logged</p>
+            <div style={{ fontSize: 46, color: "#FFD700" }}>★</div>
+            <h2 style={{ fontSize: 30, fontWeight: 400, color: "#fff", margin: "12px 0 8px" }}>{userName}'s Life Vision</h2>
+            <p style={{ color: "#666", fontSize: 14, margin: 0 }}>Synthesized from {doneIds.length} goals · {totalLogs} check-ins logged</p>
           </div>
           {visionLoading && (
             <div style={{ textAlign: "center", padding: "60px 0" }}>
@@ -950,10 +952,10 @@ export default function App() {
                     const suggestion = s < 30
                       ? `Focus on showing up consistently. Even small daily actions compound over time.`
                       : s < 60
-                      ? `You are building momentum. Push through resistance - the next 20 points will feel the hardest.`
+                      ? `You are building momentum. Push through resistance — the next 20 points will feel the hardest.`
                       : s < 80
                       ? `You are in flow. This is where real transformation happens. Do not slow down now.`
-                      : `You are in the mastery zone. Raise the standard - what does 110% look like for this goal?`;
+                      : `You are in the mastery zone. Raise the standard — what does 110% look like for this goal?`;
                     return (
                       <div key={id} style={{ background: "rgba(255,255,255,0.02)", border: `1px solid ${c?.color}22`, borderRadius: 14, padding: "18px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 10, justifyContent: "space-between" }}>
@@ -1012,7 +1014,7 @@ export default function App() {
                           <div style={{ width: 100, flexShrink: 0 }}>
                             <div style={{ fontSize: 11, color: c?.color, marginBottom: 2 }}>{c?.icon} {c?.name}</div>
                             <div style={{ fontSize: 10, color: trend >= 0 ? "#7CE8A0" : "#E87C7C" }}>
-                              {trend >= 0 ? "up" : "down"} {Math.abs(trend)} pts over {recent.length} logs
+                              {trend >= 0 ? "↑" : "↓"} {Math.abs(trend)} pts over {recent.length} logs
                             </div>
                           </div>
                           <div style={{ flex: 1 }}>
