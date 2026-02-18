@@ -50,7 +50,7 @@ const callClaude = async (messages, system) => {
       geminiMessages.splice(1, 0, { role: "model", parts: [{ text: "Understood. I will follow these instructions." }] });
     }
     const r = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${import.meta.env.VITE_GEMINI_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${import.meta.env.VITE_GEMINI_KEY}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
