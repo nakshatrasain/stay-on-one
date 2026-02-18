@@ -44,20 +44,49 @@ const store = {
 // ─── CLAUDE API ───────────────────────────────────────────────────────────────
 const callClaude = async (messages, system) => {
   try {
-    const r = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": import.meta.env.VITE_ANTHROPIC_KEY,
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-direct-browser-access": "true",
-      },
-      body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 1000, system, messages }),
-    });
+    const geminiMessages = messages.map(m => ({
+      role: m.role === "assistant" ? "model" : "user",
+      parts: [{ text: m.content }]
+    }));
+
+    if (system) {
+      geminiMessages.unshift({
+        role: "user",
+        parts: [{ text: `System instructions: ${system}` }]
+      });
+      geminiMessages.splice(1, 0, {
+        role: "model",
+        parts: [{ text: "Understood. I will follow these instructions." }]
+      });
+    }
+
+    const r = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${import.meta.env.VITE_GEMINI_KEY}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contents: geminiMessages }),
+      }
+    );
     const d = await r.json();
-    return d.content?.map(b => b.text || "").join("") || "No response.";
+    return d.candidates?.[0]?.content?.parts?.[0]?.text || "No response.";
   } catch { return "Connection error. Please try again."; }
 };
+```
+
+Click **Commit changes** → **Commit changes** in the popup.
+
+---
+
+## Change 2: Add Gemini API key to your project
+
+Still in GitHub, in the root of your repo (not inside any folder), create a new file called `.env.example`
+
+Name: `.env.example`
+
+Paste this:
+```
+VITE_GEMINI_KEY=your_key_here
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
 function getStreak(logs) {
