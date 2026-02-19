@@ -114,6 +114,181 @@ function Bar({ val, color }) {
   );
 }
 
+// ─── LANDING PAGE ────────────────────────────────────────────────────────────
+function LandingPage({ onEnter }) {
+  const [nameInput, setNameInput] = useState("");
+  const [showName, setShowName] = useState(false);
+
+  const principles = [
+    { icon: "◎", text: "Most people fail not from lack of effort, but from divided attention." },
+    { icon: "◈", text: "One goal, compounded daily, beats ten goals pursued half-heartedly." },
+    { icon: "★", text: "The life you want is built in the ordinary moments you track." },
+  ];
+
+  const features = [
+    { icon: "◎", label: "12 Life Categories", desc: "Every dimension of a complete human life, from health to spirit to wealth." },
+    { icon: "📊", label: "Daily Check-in", desc: "Log what happened, get AI feedback, watch your score move in real time." },
+    { icon: "🧠", label: "AI Coach", desc: "A coach that knows your goals, your history, and what you need to hear." },
+    { icon: "★", label: "Life Vision", desc: "An AI-generated manifesto that ties all your goals into one north star." },
+  ];
+
+  return (
+    <div style={{ minHeight: "100vh", background: "#080808", fontFamily: "Georgia, serif", color: "#e0e0e0" }}>
+
+      {/* Nav */}
+      <div style={{ padding: "22px 40px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ color: "#FFD700", fontSize: 20 }}>★</span>
+          <span style={{ fontSize: 16, color: "#fff" }}>Stay on One</span>
+        </div>
+        <button onClick={() => setShowName(true)} style={{ background: "rgba(255,215,0,0.1)", border: "1px solid rgba(255,215,0,0.3)", borderRadius: 8, padding: "8px 20px", fontSize: 13, color: "#FFD700", cursor: "pointer", fontFamily: "Georgia,serif" }}>
+          Begin →
+        </button>
+      </div>
+
+      {/* Hero */}
+      <div style={{ maxWidth: 720, margin: "0 auto", padding: "100px 40px 80px", textAlign: "center" }}>
+        <div style={{ fontSize: 13, color: "#555", letterSpacing: "0.2em", textTransform: "uppercase", marginBottom: 28 }}>Inspired by Paul Graham</div>
+        <h1 style={{ fontSize: 52, fontWeight: 400, color: "#fff", lineHeight: 1.2, margin: "0 0 28px" }}>
+          The only thing that<br />
+          <span style={{ color: "#FFD700" }}>compounds is consistency.</span>
+        </h1>
+        <p style={{ fontSize: 18, color: "#888", lineHeight: 1.8, margin: "0 0 48px", maxWidth: 540, marginLeft: "auto", marginRight: "auto" }}>
+          Most productivity systems fail because they ask you to track everything. Stay on One asks you to track one thing per life area — and actually do it every day.
+        </p>
+        {!showName ? (
+          <button onClick={() => setShowName(true)} style={{ background: "#FFD700", color: "#000", border: "none", borderRadius: 10, padding: "16px 40px", fontSize: 17, fontFamily: "Georgia,serif", fontWeight: 700, cursor: "pointer", boxShadow: "0 4px 30px rgba(255,215,0,0.3)" }}>
+            Start Building Your Life
+          </button>
+        ) : (
+          <div style={{ display: "flex", gap: 10, maxWidth: 420, margin: "0 auto" }}>
+            <input autoFocus value={nameInput} onChange={e => setNameInput(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && nameInput.trim() && onEnter(nameInput.trim())}
+              placeholder="What's your name?"
+              style={{ flex: 1, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 10, padding: "14px 18px", fontSize: 16, color: "#fff", fontFamily: "Georgia,serif", outline: "none" }} />
+            <button onClick={() => nameInput.trim() && onEnter(nameInput.trim())} disabled={!nameInput.trim()}
+              style={{ background: nameInput.trim() ? "#FFD700" : "rgba(255,215,0,0.2)", color: nameInput.trim() ? "#000" : "#666", border: "none", borderRadius: 10, padding: "14px 24px", fontSize: 16, fontFamily: "Georgia,serif", fontWeight: 700, cursor: nameInput.trim() ? "pointer" : "default" }}>
+              Begin
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Divider quote */}
+      <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", borderBottom: "1px solid rgba(255,255,255,0.06)", padding: "40px", textAlign: "center", background: "rgba(255,215,0,0.02)" }}>
+        <p style={{ fontSize: 20, color: "#aaa", fontStyle: "italic", margin: 0, maxWidth: 640, marginLeft: "auto", marginRight: "auto", lineHeight: 1.7 }}>
+          "The way to do really good work is to stay on one thing long enough that you go from knowing nothing to knowing something, and from knowing something to knowing more than anyone else."
+        </p>
+        <div style={{ fontSize: 13, color: "#555", marginTop: 16 }}>— Paul Graham</div>
+      </div>
+
+      {/* How it works */}
+      <div style={{ maxWidth: 800, margin: "0 auto", padding: "90px 40px" }}>
+        <div style={{ fontSize: 11, color: "#555", letterSpacing: "0.2em", textTransform: "uppercase", textAlign: "center", marginBottom: 14 }}>The Concept</div>
+        <h2 style={{ fontSize: 32, fontWeight: 400, color: "#fff", textAlign: "center", margin: "0 0 60px" }}>Why one goal per area works</h2>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 40 }}>
+          {principles.map((p, i) => (
+            <div key={i} style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 28, color: "#FFD700", marginBottom: 16 }}>{p.icon}</div>
+              <p style={{ fontSize: 15, color: "#999", lineHeight: 1.7, margin: 0 }}>{p.text}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Psychology section */}
+      <div style={{ background: "rgba(255,255,255,0.02)", borderTop: "1px solid rgba(255,255,255,0.06)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+        <div style={{ maxWidth: 800, margin: "0 auto", padding: "90px 40px" }}>
+          <div style={{ fontSize: 11, color: "#555", letterSpacing: "0.2em", textTransform: "uppercase", textAlign: "center", marginBottom: 14 }}>The Psychology</div>
+          <h2 style={{ fontSize: 32, fontWeight: 400, color: "#fff", textAlign: "center", margin: "0 0 50px" }}>Built on how humans actually change</h2>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 30 }}>
+            {[
+              { title: "Identity-based habits", body: "Every time you check in, you cast a vote for the person you want to become. The score isn't vanity — it's evidence of identity shift. James Clear calls this the most powerful driver of lasting change." },
+              { title: "Compounding feedback loops", body: "Kahneman showed that we make better decisions when we slow down and reflect. The daily check-in forces System 2 thinking — deliberate, honest, and forward-looking — instead of drifting through days on autopilot." },
+              { title: "Specificity over motivation", body: "Vague goals like 'get healthy' fail because the brain cannot act on them. One specific goal per life area gives your mind a clear target. Specificity activates the prefrontal cortex — your planning brain." },
+              { title: "Accountability changes behaviour", body: "Research consistently shows that people who track their progress and report it to someone — even an AI — are significantly more likely to follow through. Observation creates intention." },
+            ].map((item, i) => (
+              <div key={i} style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 14, padding: "24px 26px" }}>
+                <div style={{ fontSize: 15, color: "#FFD700", marginBottom: 10 }}>{item.title}</div>
+                <p style={{ fontSize: 14, color: "#888", lineHeight: 1.75, margin: 0 }}>{item.body}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Features */}
+      <div style={{ maxWidth: 800, margin: "0 auto", padding: "90px 40px" }}>
+        <div style={{ fontSize: 11, color: "#555", letterSpacing: "0.2em", textTransform: "uppercase", textAlign: "center", marginBottom: 14 }}>What's Inside</div>
+        <h2 style={{ fontSize: 32, fontWeight: 400, color: "#fff", textAlign: "center", margin: "0 0 50px" }}>Everything you need. Nothing you don't.</h2>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+          {features.map((f, i) => (
+            <div key={i} style={{ display: "flex", gap: 16, padding: "22px 24px", background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 14 }}>
+              <div style={{ fontSize: 24, flexShrink: 0, marginTop: 2 }}>{f.icon}</div>
+              <div>
+                <div style={{ fontSize: 15, color: "#ddd", marginBottom: 6 }}>{f.label}</div>
+                <div style={{ fontSize: 13, color: "#777", lineHeight: 1.6 }}>{f.desc}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* 12 Categories */}
+      <div style={{ background: "rgba(255,255,255,0.02)", borderTop: "1px solid rgba(255,255,255,0.06)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+        <div style={{ maxWidth: 860, margin: "0 auto", padding: "90px 40px" }}>
+          <div style={{ fontSize: 11, color: "#555", letterSpacing: "0.2em", textTransform: "uppercase", textAlign: "center", marginBottom: 14 }}>The Framework</div>
+          <h2 style={{ fontSize: 32, fontWeight: 400, color: "#fff", textAlign: "center", margin: "0 0 50px" }}>12 dimensions of a complete life</h2>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
+            {CATS.map(c => (
+              <div key={c.id} style={{ background: "rgba(255,255,255,0.02)", border: `1px solid ${c.color}33`, borderRadius: 12, padding: "16px", textAlign: "center" }}>
+                <div style={{ fontSize: 22, color: c.color, marginBottom: 8 }}>{c.icon}</div>
+                <div style={{ fontSize: 13, color: "#ccc" }}>{c.name}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Final CTA */}
+      <div style={{ maxWidth: 600, margin: "0 auto", padding: "100px 40px", textAlign: "center" }}>
+        <div style={{ fontSize: 42, color: "#FFD700", marginBottom: 24 }}>★</div>
+        <h2 style={{ fontSize: 34, fontWeight: 400, color: "#fff", margin: "0 0 18px" }}>You already know what to work on.</h2>
+        <p style={{ fontSize: 17, color: "#888", lineHeight: 1.7, margin: "0 0 40px" }}>The question is whether you will show up for it tomorrow. And the day after. And the day after that.</p>
+        {!showName ? (
+          <button onClick={() => setShowName(true)} style={{ background: "#FFD700", color: "#000", border: "none", borderRadius: 10, padding: "16px 40px", fontSize: 17, fontFamily: "Georgia,serif", fontWeight: 700, cursor: "pointer", boxShadow: "0 4px 30px rgba(255,215,0,0.3)" }}>
+            Start Today
+          </button>
+        ) : (
+          <div style={{ display: "flex", gap: 10, maxWidth: 420, margin: "0 auto" }}>
+            <input autoFocus value={nameInput} onChange={e => setNameInput(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && nameInput.trim() && onEnter(nameInput.trim())}
+              placeholder="What's your name?"
+              style={{ flex: 1, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 10, padding: "14px 18px", fontSize: 16, color: "#fff", fontFamily: "Georgia,serif", outline: "none" }} />
+            <button onClick={() => nameInput.trim() && onEnter(nameInput.trim())} disabled={!nameInput.trim()}
+              style={{ background: nameInput.trim() ? "#FFD700" : "rgba(255,215,0,0.2)", color: nameInput.trim() ? "#000" : "#666", border: "none", borderRadius: 10, padding: "14px 24px", fontSize: 16, fontFamily: "Georgia,serif", fontWeight: 700, cursor: nameInput.trim() ? "pointer" : "default" }}>
+              Begin
+            </button>
+          </div>
+        )}
+        <div style={{ fontSize: 12, color: "#444", marginTop: 20 }}>Free. Private. No sign-up required.</div>
+      </div>
+
+      {/* Footer */}
+      <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", padding: "30px 40px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ color: "#FFD700" }}>★</span>
+          <span style={{ fontSize: 14, color: "#444" }}>Stay on One</span>
+        </div>
+        <div style={{ fontSize: 13, color: "#444" }}>Built for people who finish things.</div>
+      </div>
+
+      <style>{`@keyframes sooSpin{to{transform:rotate(360deg)}}`}</style>
+    </div>
+  );
+}
+
+// ─── COACH ───────────────────────────────────────────────────────────────────
 function Coach({ userName, goals, scores, logs, lifeVision, currentPage }) {
   const [open, setOpen] = useState(false);
   const [msgs, setMsgs] = useState([]);
@@ -123,18 +298,9 @@ function Coach({ userName, goals, scores, logs, lifeVision, currentPage }) {
   const endRef = useRef(null);
   const inputRef = useRef(null);
 
-  useEffect(() => {
-    const t = setTimeout(() => setShowTip(false), 5000);
-    return () => clearTimeout(t);
-  }, []);
-
-  useEffect(() => {
-    if (open) setTimeout(() => inputRef.current?.focus(), 150);
-  }, [open]);
-
-  useEffect(() => {
-    if (open) endRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [msgs]);
+  useEffect(() => { const t = setTimeout(() => setShowTip(false), 5000); return () => clearTimeout(t); }, []);
+  useEffect(() => { if (open) setTimeout(() => inputRef.current?.focus(), 150); }, [open]);
+  useEffect(() => { if (open) endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs]);
 
   useEffect(() => {
     if (!open || msgs.length > 0) return;
@@ -142,6 +308,7 @@ function Coach({ userName, goals, scores, logs, lifeVision, currentPage }) {
     const pageCtx = {
       vision: "I see you've been working on your Life Vision — ask me anything about it.",
       checkin: "You're doing your daily check-in — great habit.",
+      dailycheckin: "You're reviewing all your goals today — I'm here to help.",
       progress: "You're reviewing your progress — I can help you interpret it.",
       dashboard: "How can I help you stay focused today?",
     }[currentPage] || "How can I help?";
@@ -160,13 +327,14 @@ function Coach({ userName, goals, scores, logs, lifeVision, currentPage }) {
         }).join("\n")
       : "No goals set yet.";
     const visionCtx = lifeVision ? `\n\nLife Vision:\n${lifeVision.slice(0, 500)}...` : "";
-    const pageCtx = { vision: "Viewing Life Vision.", checkin: "Doing daily check-in.", progress: "Reviewing progress history.", dashboard: "On the main dashboard.", setup: "Setting up goals." }[currentPage] || "";
+    const pageCtx = { vision: "Viewing Life Vision.", checkin: "Doing single goal check-in.", dailycheckin: "Doing full daily check-in across all goals.", progress: "Reviewing progress history.", dashboard: "On the main dashboard.", setup: "Setting up goals." }[currentPage] || "";
     return `You are Coach inside "Stay on One" — a life accountability app inspired by Paul Graham's philosophy that greatness comes from compounding one thing long enough.\n\nUser: ${userName || "this person"}\nGoals:\n${goalsCtx}${visionCtx}\nContext: ${pageCtx}\n\nBe warm but direct. Reference actual goals by name. Keep responses to 2-4 sentences. If they want to chase something new, redirect to their one thing.`;
   };
 
   const QUICK = {
     vision: ["What does my vision mean for today?", "I have doubts about this", "Which goal first?"],
     checkin: ["I had a bad day", "How do I stay consistent?", "I want to quit"],
+    dailycheckin: ["How am I doing overall?", "Which area needs most work?", "I'm feeling overwhelmed"],
     progress: ["Am I improving?", "What's holding me back?", "What should I focus on?"],
   }[currentPage] || ["Am I on the right track?", "I'm feeling distracted", "Help me prioritize"];
 
@@ -217,9 +385,7 @@ function Coach({ userName, goals, scores, logs, lifeVision, currentPage }) {
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <div style={{ width: 22, height: 22, borderRadius: "50%", background: "linear-gradient(135deg,#FFD700,#FF9500)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, color: "#000" }}>C</div>
                 <div style={{ padding: "9px 13px", background: "rgba(255,255,255,0.06)", borderRadius: "14px 14px 14px 4px", border: "1px solid rgba(255,255,255,0.08)", display: "flex", gap: 4 }}>
-                  {[0,1,2].map(i => (
-                    <div key={i} style={{ width: 5, height: 5, borderRadius: "50%", background: "#FFD700", opacity: 0.7, animation: `coachBounce 1s ease ${i*0.15}s infinite` }} />
-                  ))}
+                  {[0,1,2].map(i => <div key={i} style={{ width: 5, height: 5, borderRadius: "50%", background: "#FFD700", opacity: 0.7, animation: `coachBounce 1s ease ${i*0.15}s infinite` }} />)}
                 </div>
               </div>
             )}
@@ -228,9 +394,7 @@ function Coach({ userName, goals, scores, logs, lifeVision, currentPage }) {
           {msgs.length <= 1 && (
             <div style={{ padding: "0 12px 8px", display: "flex", flexWrap: "wrap", gap: 5 }}>
               {QUICK.map(q => (
-                <button key={q} onClick={() => setInput(q)} style={{ background: "rgba(255,215,0,0.08)", border: "1px solid rgba(255,215,0,0.2)", borderRadius: 20, padding: "4px 11px", fontSize: 11, color: "#FFD700", cursor: "pointer", fontFamily: "Georgia,serif" }}>
-                  {q}
-                </button>
+                <button key={q} onClick={() => setInput(q)} style={{ background: "rgba(255,215,0,0.08)", border: "1px solid rgba(255,215,0,0.2)", borderRadius: 20, padding: "4px 11px", fontSize: 11, color: "#FFD700", cursor: "pointer", fontFamily: "Georgia,serif" }}>{q}</button>
               ))}
             </div>
           )}
@@ -251,9 +415,10 @@ function Coach({ userName, goals, scores, logs, lifeVision, currentPage }) {
   );
 }
 
+// ─── NAV ─────────────────────────────────────────────────────────────────────
 function Nav({ tab, setTab, hasGoals, userName }) {
   const items = hasGoals
-    ? [["dashboard","Dashboard"],["checkin","Check-in"],["progress","Progress"],["vision","Vision"],["setup","Goals"]]
+    ? [["dashboard","Dashboard"],["dailycheckin","Daily Check-in"],["progress","Progress"],["vision","Vision"],["setup","Goals"]]
     : [["setup","Goals"]];
   return (
     <div style={{ position: "sticky", top: 0, zIndex: 100, height: 58, display: "flex", alignItems: "center", padding: "0 26px", gap: 4, background: "rgba(8,8,8,0.94)", backdropFilter: "blur(16px)", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
@@ -269,12 +434,13 @@ function Nav({ tab, setTab, hasGoals, userName }) {
   );
 }
 
+// ─── MAIN APP ────────────────────────────────────────────────────────────────
 export default function App() {
   const [loaded, setLoaded]           = useState(false);
+  const [screen, setScreen]           = useState("landing"); // landing | app
   const [tab, setTab]                 = useState("setup");
   const [activeId, setActiveId]       = useState(null);
   const [userName, setUserName]       = useState("");
-  const [nameInput, setNameInput]     = useState("");
   const [goals, setGoals]             = useState({});
   const [scores, setScores]           = useState({});
   const [logs, setLogs]               = useState({});
@@ -284,21 +450,25 @@ export default function App() {
   const [ciNote, setCiNote]           = useState("");
   const [ciMood, setCiMood]           = useState(3);
   const [ciLoading, setCiLoading]     = useState(false);
-  const [ciFeedback, setCiFeedback]   = useState("");
+  const [ciFeedback, setCiFeedback]   = useState({});
   const [chatInput, setChatInput]     = useState("");
   const [chatLoading, setChatLoading] = useState(false);
   const [visionLoading, setVisionLoading] = useState(false);
+  const [dailyActive, setDailyActive] = useState(null);
   const chatEndRef = useRef(null);
 
   useEffect(() => {
     (async () => {
       const d = await store.get("soo3");
       if (d) {
-        setUserName(d.userName || ""); setNameInput(d.userName || "");
+        setUserName(d.userName || "");
         setGoals(d.goals || {}); setScores(d.scores || {});
         setLogs(d.logs || {}); setChats(d.chats || {});
         setVision(d.vision || "");
-        setTab(Object.keys(d.goals || {}).length ? "dashboard" : "setup");
+        if (d.userName) {
+          setScreen("app");
+          setTab(Object.keys(d.goals || {}).length ? "dashboard" : "setup");
+        }
       }
       setLoaded(true);
     })();
@@ -308,15 +478,16 @@ export default function App() {
     store.set("soo3", { userName, goals, scores, logs, chats, vision, ...patch });
   };
 
+  const handleEnter = (name) => {
+    setUserName(name);
+    setScreen("app");
+    setTab("setup");
+    save({ userName: name });
+  };
+
   const doneIds = Object.keys(goals).filter(k => goals[k]?.goal?.trim()).map(Number);
   const sc = (id) => scores[id] ?? 50;
   const todayLogged = (id) => (logs[id] || []).some(l => l.date === todayStr());
-
-  const saveName = () => {
-    if (!nameInput.trim()) return;
-    setUserName(nameInput.trim());
-    save({ userName: nameInput.trim() });
-  };
 
   const saveGoal = () => {
     if (!editGoal.goal.trim()) return;
@@ -330,24 +501,25 @@ export default function App() {
     setGoals(ng); save({ goals: ng }); setTab("setup");
   };
 
-  const submitCheckin = async () => {
-    if (!ciNote.trim()) return;
+  const submitCheckin = async (id, note, mood) => {
+    const targetId = id || activeId;
     setCiLoading(true);
-    const recent = (logs[activeId] || []).slice(-5).map(l => `${l.date}: ${l.note} (mood ${l.mood}/5)`).join("\n");
+    const recent = (logs[targetId] || []).slice(-5).map(l => `${l.date}: ${l.note} (mood ${l.mood}/5)`).join("\n");
     const reply = await callClaude(
-      [{ role: "user", content: `Goal: ${goals[activeId]?.goal}\nRecent:\n${recent || "First check-in"}\n\nToday ${todayStr()}, mood ${ciMood}/5:\n${ciNote}` }],
+      [{ role: "user", content: `Goal: ${goals[targetId]?.goal}\nRecent:\n${recent || "First check-in"}\n\nToday ${todayStr()}, mood ${mood}/5:\n${note}` }],
       `You are an accountability coach. In 2-3 sentences: acknowledge what they did, assess if it moved them toward or away from their goal, give one sharp insight. End with exactly: DELTA:+8 or DELTA:-5 (range -20 to +20). Nothing after.`
     );
     const match = reply.match(/DELTA:([+-]?\d+)/);
     const delta = match ? parseInt(match[1]) : 0;
     const clean = reply.replace(/DELTA:[+-]?\d+/, "").trim();
-    const newScore = Math.max(0, Math.min(100, sc(activeId) + delta));
-    const entry = { date: todayStr(), note: ciNote, mood: ciMood, delta, aiReply: clean };
-    const nl = { ...logs, [activeId]: [...(logs[activeId] || []), entry] };
-    const ns = { ...scores, [activeId]: newScore };
+    const newScore = Math.max(0, Math.min(100, sc(targetId) + delta));
+    const entry = { date: todayStr(), note, mood, delta, aiReply: clean };
+    const nl = { ...logs, [targetId]: [...(logs[targetId] || []), entry] };
+    const ns = { ...scores, [targetId]: newScore };
     setLogs(nl); setScores(ns);
-    setCiFeedback(`${clean}\n\n${delta >= 0 ? "+" : ""}${delta} pts → ${newScore}/100`);
-    setCiLoading(false); save({ logs: nl, scores: ns });
+    setCiFeedback(prev => ({ ...prev, [targetId]: `${clean}\n\n${delta >= 0 ? "+" : ""}${delta} pts → ${newScore}/100` }));
+    setCiLoading(false);
+    save({ logs: nl, scores: ns });
   };
 
   const sendGoalChat = async () => {
@@ -384,24 +556,171 @@ export default function App() {
     </div>
   );
 
-  if (!userName) return (
-    <div style={{ minHeight: "100vh", background: "#080808", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "Georgia,serif" }}>
-      <div style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 20, padding: 40, maxWidth: 420, width: "100%", margin: 20, display: "flex", flexDirection: "column", alignItems: "center", gap: 18, textAlign: "center" }}>
-        <div style={{ fontSize: 52, color: "#FFD700" }}>★</div>
-        <h1 style={{ fontSize: 34, fontWeight: 400, color: "#fff", margin: 0 }}>Stay on One</h1>
-        <p style={{ color: "#888", fontSize: 15, lineHeight: 1.6, margin: 0 }}>One goal. Daily accountability. Compounding greatness.</p>
-        <input style={{ width: "100%", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 10, padding: "13px 16px", fontSize: 16, color: "#fff", fontFamily: "Georgia,serif", outline: "none" }}
-          placeholder="What's your name?" value={nameInput}
-          onChange={e => setNameInput(e.target.value)}
-          onKeyDown={e => e.key === "Enter" && saveName()} autoFocus />
-        <button onClick={saveName} disabled={!nameInput.trim()}
-          style={{ width: "100%", background: nameInput.trim() ? "#FFD700" : "rgba(255,215,0,0.2)", color: nameInput.trim() ? "#000" : "#666", border: "none", borderRadius: 9, padding: "13px", fontSize: 15, fontFamily: "Georgia,serif", fontWeight: 700, cursor: nameInput.trim() ? "pointer" : "default", transition: "all 0.2s" }}>
-          Begin
-        </button>
+  if (screen === "landing") return <LandingPage onEnter={handleEnter} />;
+
+  // ── DAILY CHECK-IN PAGE ──────────────────────────────────────────────────
+  const DailyCheckin = () => {
+    const [notes, setNotes] = useState({});
+    const [moods, setMoods] = useState({});
+    const pending = doneIds.filter(id => !todayLogged(id));
+    const done = doneIds.filter(id => todayLogged(id));
+    const current = dailyActive || (pending.length > 0 ? pending[0] : null);
+
+    if (doneIds.length === 0) return (
+      <div style={{ padding: "80px 26px", textAlign: "center" }}>
+        <div style={{ fontSize: 40, marginBottom: 16 }}>◎</div>
+        <h2 style={{ fontSize: 22, fontWeight: 400, color: "#fff", margin: "0 0 10px" }}>No goals set yet</h2>
+        <p style={{ color: "#666", fontSize: 15, margin: "0 0 24px" }}>Set at least one goal to start your daily check-in.</p>
+        <button onClick={() => setTab("setup")} style={{ background: "#FFD700", color: "#000", border: "none", borderRadius: 9, padding: "12px 24px", fontSize: 15, fontFamily: "Georgia,serif", fontWeight: 700, cursor: "pointer" }}>Set Goals →</button>
       </div>
-      <style>{`@keyframes sooSpin{to{transform:rotate(360deg)}}`}</style>
-    </div>
-  );
+    );
+
+    return (
+      <div style={{ padding: "34px 26px", maxWidth: 1100, margin: "0 auto" }}>
+        <div style={{ marginBottom: 30 }}>
+          <h2 style={{ fontSize: 26, fontWeight: 400, color: "#fff", margin: "0 0 6px" }}>Daily Check-in · {todayStr()}</h2>
+          <p style={{ color: "#666", fontSize: 14, margin: 0 }}>{pending.length} remaining · {done.length} completed today</p>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "260px 1fr", gap: 24 }}>
+          {/* Sidebar — all goals */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ fontSize: 11, color: "#555", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 6 }}>Your Goals</div>
+            {doneIds.map(id => {
+              const c = cat(id);
+              const logged = todayLogged(id);
+              const isActive = current === id;
+              return (
+                <div key={id} onClick={() => setDailyActive(id)}
+                  style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderRadius: 10, cursor: "pointer", background: isActive ? `rgba(${hexRgb(c?.color||"#FFD700")},0.1)` : "rgba(255,255,255,0.02)", border: `1px solid ${isActive ? c?.color+"55" : "rgba(255,255,255,0.06)"}`, transition: "all 0.15s" }}>
+                  <span style={{ color: c?.color, fontSize: 16 }}>{c?.icon}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, color: isActive ? "#fff" : "#aaa" }}>{c?.name}</div>
+                    <div style={{ fontSize: 11, color: "#555" }}>{sc(id)}/100</div>
+                  </div>
+                  {logged
+                    ? <span style={{ fontSize: 14, color: "#7CE8A0" }}>✓</span>
+                    : <span style={{ fontSize: 10, color: "#E8D07C", background: "rgba(232,208,124,0.1)", border: "1px solid rgba(232,208,124,0.2)", borderRadius: 10, padding: "2px 7px" }}>due</span>
+                  }
+                </div>
+              );
+            })}
+            {done.length === doneIds.length && (
+              <div style={{ marginTop: 12, padding: "14px", background: "rgba(124,232,160,0.08)", border: "1px solid rgba(124,232,160,0.2)", borderRadius: 10, textAlign: "center" }}>
+                <div style={{ fontSize: 18, marginBottom: 6 }}>🎉</div>
+                <div style={{ fontSize: 13, color: "#7CE8A0" }}>All done for today!</div>
+                <div style={{ fontSize: 11, color: "#555", marginTop: 4 }}>Come back tomorrow</div>
+              </div>
+            )}
+          </div>
+
+          {/* Main area */}
+          {current ? (() => {
+            const c = cat(current);
+            const logged = todayLogged(current);
+            const feedback = ciFeedback[current];
+            const note = notes[current] || "";
+            const mood = moods[current] || 3;
+            const lastLogs = (logs[current] || []).slice(-3).reverse();
+
+            return (
+              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                {/* Header */}
+                <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "20px 24px", background: `rgba(${hexRgb(c?.color||"#FFD700")},0.06)`, border: `1px solid ${c?.color}33`, borderRadius: 16 }}>
+                  <span style={{ fontSize: 28, color: c?.color }}>{c?.icon}</span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 17, color: c?.color }}>{c?.name}</div>
+                    <div style={{ fontSize: 13, color: "#777", marginTop: 2 }}>{goals[current]?.goal}</div>
+                  </div>
+                  <div style={{ position: "relative", width: 58, height: 58, flexShrink: 0 }}>
+                    <Ring pct={sc(current)} color={c?.color || "#FFD700"} size={58} stroke={5} />
+                    <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, color: c?.color }}>{sc(current)}</div>
+                  </div>
+                </div>
+
+                {/* Past logs snippet */}
+                {lastLogs.length > 0 && (
+                  <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 12, padding: "14px 18px" }}>
+                    <div style={{ fontSize: 11, color: "#555", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 10 }}>Recent History</div>
+                    {lastLogs.map((l, i) => (
+                      <div key={i} style={{ display: "flex", gap: 10, paddingBottom: 8, marginBottom: 8, borderBottom: i < lastLogs.length - 1 ? "1px solid rgba(255,255,255,0.05)" : "none" }}>
+                        <span style={{ fontSize: 12, color: "#555", minWidth: 70 }}>{l.date}</span>
+                        <span style={{ fontSize: 12, color: l.delta >= 0 ? "#7CE8A0" : "#E87C7C", minWidth: 30 }}>{l.delta >= 0 ? "+" : ""}{l.delta}</span>
+                        <span style={{ fontSize: 13, color: "#888", lineHeight: 1.4 }}>{l.note.slice(0, 80)}{l.note.length > 80 ? "..." : ""}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {logged && !feedback ? (
+                  <div style={{ padding: "30px", textAlign: "center", background: "rgba(124,232,160,0.05)", border: "1px solid rgba(124,232,160,0.2)", borderRadius: 14 }}>
+                    <div style={{ fontSize: 28, marginBottom: 10 }}>✓</div>
+                    <div style={{ fontSize: 15, color: "#7CE8A0" }}>Logged today</div>
+                    <div style={{ fontSize: 13, color: "#555", marginTop: 6 }}>
+                      {(logs[current]||[]).slice(-1)[0]?.aiReply?.slice(0, 120)}
+                    </div>
+                  </div>
+                ) : feedback ? (
+                  <div style={{ background: `rgba(${hexRgb(c?.color||"#FFD700")},0.06)`, border: `1px solid ${c?.color}33`, borderRadius: 14, padding: "22px 24px" }}>
+                    <div style={{ fontSize: 11, color: c?.color, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 12 }}>Coach Feedback</div>
+                    <p style={{ fontSize: 14, color: "#ddd", lineHeight: 1.7, whiteSpace: "pre-wrap", margin: "0 0 16px" }}>{feedback}</p>
+                    <Bar val={sc(current)} color={c?.color || "#FFD700"} />
+                    {pending.filter(id => id !== current).length > 0 && (
+                      <button onClick={() => { setDailyActive(pending.filter(id => id !== current)[0]); setCiFeedback(p => ({ ...p, [current]: undefined })); setNotes(n => ({ ...n, [current]: "" })); setMoods(m => ({ ...m, [current]: 3 })); }}
+                        style={{ marginTop: 16, background: "#FFD700", color: "#000", border: "none", borderRadius: 8, padding: "10px 20px", fontSize: 13, fontFamily: "Georgia,serif", fontWeight: 700, cursor: "pointer" }}>
+                        Next Goal →
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <>
+                    {/* Mood */}
+                    <div>
+                      <div style={{ fontSize: 11, color: "#666", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 10 }}>How are you feeling about this goal today?</div>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        {["😔","😐","🙂","😊","🔥"].map((emoji, i) => (
+                          <button key={i} onClick={() => setMoods(m => ({ ...m, [current]: i+1 }))}
+                            style={{ flex: 1, border: `1px solid ${mood === i+1 ? (c?.color||"#FFD700") : "rgba(255,255,255,0.1)"}`, background: mood === i+1 ? `rgba(${hexRgb(c?.color||"#FFD700")},0.15)` : "rgba(255,255,255,0.04)", borderRadius: 8, padding: "10px 0", fontSize: 20, cursor: "pointer" }}>
+                            {emoji}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Note */}
+                    <div>
+                      <div style={{ fontSize: 11, color: "#666", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 10 }}>What happened toward this goal today?</div>
+                      <textarea rows={4} value={note} onChange={e => setNotes(n => ({ ...n, [current]: e.target.value }))}
+                        placeholder="Be specific. What did you do, skip, or decide? The more honest, the better the feedback."
+                        style={{ width: "100%", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10, padding: "13px 16px", fontSize: 14, color: "#fff", fontFamily: "Georgia,serif", outline: "none", resize: "vertical" }} />
+                    </div>
+
+                    <button onClick={() => submitCheckin(current, note, mood)} disabled={!note.trim() || ciLoading}
+                      style={{ background: note.trim() ? "#FFD700" : "rgba(255,215,0,0.15)", color: note.trim() ? "#000" : "#666", border: "none", borderRadius: 10, padding: "14px", fontSize: 15, fontFamily: "Georgia,serif", fontWeight: 700, cursor: note.trim() ? "pointer" : "default" }}>
+                      {ciLoading ? "Analyzing..." : "Log & Get AI Feedback"}
+                    </button>
+                  </>
+                )}
+
+                {/* Analyse with Coach CTA */}
+                <div style={{ padding: "16px 20px", background: "rgba(255,215,0,0.04)", border: "1px solid rgba(255,215,0,0.12)", borderRadius: 12, display: "flex", alignItems: "center", gap: 14 }}>
+                  <div style={{ fontSize: 22 }}>C</div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 14, color: "#ddd" }}>Want to go deeper?</div>
+                    <div style={{ fontSize: 12, color: "#666" }}>Open Coach in the bottom-right to analyse your {c?.name} journey, patterns, and next steps — like having a Whoop coach for your life.</div>
+                  </div>
+                </div>
+              </div>
+            );
+          })() : (
+            <div style={{ textAlign: "center", padding: "60px 20px", color: "#666" }}>
+              <div style={{ fontSize: 14 }}>Select a goal from the left to check in</div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
 
   const renderScreen = () => {
 
@@ -465,6 +784,8 @@ export default function App() {
       </div>
     );
 
+    if (tab === "dailycheckin") return <DailyCheckin />;
+
     if (tab === "dashboard") {
       const avg = doneIds.length ? Math.round(doneIds.reduce((a, id) => a + sc(id), 0) / doneIds.length) : 0;
       const needCheckin = doneIds.filter(id => !todayLogged(id));
@@ -485,9 +806,9 @@ export default function App() {
             <div style={{ display: "flex", alignItems: "center", gap: 12, background: "rgba(255,215,0,0.07)", border: "1px solid rgba(255,215,0,0.2)", borderRadius: 10, padding: "12px 16px", marginBottom: 22 }}>
               <span style={{ color: "#FFD700" }}>★</span>
               <span style={{ fontSize: 14, color: "#ddd" }}>{needCheckin.length} goal{needCheckin.length > 1 ? "s" : ""} awaiting today's check-in</span>
-              <button onClick={() => { setActiveId(needCheckin[0]); setCiNote(""); setCiMood(3); setCiFeedback(""); setTab("checkin"); }}
+              <button onClick={() => { setDailyActive(needCheckin[0]); setTab("dailycheckin"); }}
                 style={{ marginLeft: "auto", background: "rgba(255,215,0,0.15)", border: "1px solid rgba(255,215,0,0.3)", borderRadius: 7, padding: "6px 14px", fontSize: 13, color: "#FFD700", cursor: "pointer", fontFamily: "Georgia,serif" }}>
-                Check in
+                Start Daily Check-in
               </button>
             </div>
           )}
@@ -524,7 +845,7 @@ export default function App() {
                   )}
                   <div style={{ display: "flex", gap: 7 }}>
                     {!logged
-                      ? <button onClick={() => { setActiveId(id); setCiNote(""); setCiMood(3); setCiFeedback(""); setTab("checkin"); }}
+                      ? <button onClick={() => { setDailyActive(id); setTab("dailycheckin"); }}
                           style={{ flex: 1, background: `rgba(${hexRgb(c?.color||"#FFD700")},0.1)`, border: `1px solid ${c?.color}44`, borderRadius: 7, padding: "6px", fontSize: 12, color: c?.color, cursor: "pointer", fontFamily: "Georgia,serif" }}>
                           + Check in today
                         </button>
@@ -540,10 +861,7 @@ export default function App() {
           {vision
             ? <div onClick={() => setTab("vision")} style={{ marginTop: 26, display: "flex", alignItems: "center", gap: 14, background: "rgba(255,215,0,0.05)", border: "1px solid rgba(255,215,0,0.15)", borderRadius: 12, padding: "15px 20px", cursor: "pointer" }}>
                 <span style={{ fontSize: 20, color: "#FFD700" }}>★</span>
-                <div>
-                  <div style={{ fontSize: 14, color: "#ddd" }}>Your Life Vision</div>
-                  <div style={{ fontSize: 12, color: "#666" }}>Click to view or regenerate</div>
-                </div>
+                <div><div style={{ fontSize: 14, color: "#ddd" }}>Your Life Vision</div><div style={{ fontSize: 12, color: "#666" }}>Click to view or regenerate</div></div>
                 <span style={{ marginLeft: "auto", color: "#FFD700" }}>→</span>
               </div>
             : doneIds.length > 0
@@ -556,95 +874,18 @@ export default function App() {
       );
     }
 
-    if (tab === "checkin") {
-      const c = cat(activeId);
-      const recent = (logs[activeId] || []).slice(-3).reverse();
-      return (
-        <div style={{ padding: "34px 26px", maxWidth: 1000, margin: "0 auto" }}>
-          <button onClick={() => setTab("dashboard")} style={{ background: "none", border: "none", color: "#666", cursor: "pointer", fontSize: 14, fontFamily: "Georgia,serif", padding: "0 0 18px", display: "block" }}>← Back to Dashboard</button>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 310px", gap: 26, alignItems: "flex-start" }}>
-            <div style={{ display: "flex", flexDirection: "column", gap: 15 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <span style={{ color: c?.color, fontSize: 26 }}>{c?.icon}</span>
-                <div><div style={{ color: c?.color, fontSize: 15 }}>{c?.name}</div><div style={{ fontSize: 12, color: "#666" }}>Daily check-in · {todayStr()}</div></div>
-                <div style={{ marginLeft: "auto", position: "relative", width: 62, height: 62 }}>
-                  <Ring pct={sc(activeId)} color={c?.color || "#FFD700"} size={62} stroke={5} />
-                  <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, color: c?.color }}>{sc(activeId)}</div>
-                </div>
-              </div>
-              <div style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 10, padding: "12px 15px" }}>
-                <div style={{ fontSize: 11, color: "#555", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 5 }}>Your One Goal</div>
-                <div style={{ fontSize: 14, color: "#ccc", lineHeight: 1.5 }}>{goals[activeId]?.goal}</div>
-                {goals[activeId]?.metrics && <div style={{ fontSize: 12, color: "#666", marginTop: 5 }}>{goals[activeId].metrics}</div>}
-              </div>
-              <div>
-                <div style={{ fontSize: 11, color: "#666", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 8 }}>How are you feeling?</div>
-                <div style={{ display: "flex", gap: 8 }}>
-                  {["😔","😐","🙂","😊","🔥"].map((emoji, i) => (
-                    <button key={i} onClick={() => setCiMood(i+1)}
-                      style={{ flex: 1, border: `1px solid ${ciMood === i+1 ? (c?.color||"#FFD700") : "rgba(255,255,255,0.1)"}`, background: ciMood === i+1 ? `rgba(${hexRgb(c?.color||"#FFD700")},0.15)` : "rgba(255,255,255,0.04)", borderRadius: 8, padding: "9px 0", fontSize: 18, cursor: "pointer" }}>
-                      {emoji}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <div style={{ fontSize: 11, color: "#666", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 8 }}>What happened toward this goal?</div>
-                <textarea rows={4} value={ciNote} onChange={e => setCiNote(e.target.value)}
-                  placeholder="Be specific. Cheat meal? Workout? Skipped session? Breakthrough?"
-                  style={{ width: "100%", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10, padding: "12px 15px", fontSize: 14, color: "#fff", fontFamily: "Georgia,serif", outline: "none", resize: "vertical" }} />
-              </div>
-              <button onClick={submitCheckin} disabled={!ciNote.trim() || ciLoading}
-                style={{ background: ciNote.trim() ? "#FFD700" : "rgba(255,215,0,0.15)", color: ciNote.trim() ? "#000" : "#666", border: "none", borderRadius: 9, padding: "13px", fontSize: 15, fontFamily: "Georgia,serif", fontWeight: 700, cursor: ciNote.trim() ? "pointer" : "default" }}>
-                {ciLoading ? "Analyzing..." : "Log and Get Feedback"}
-              </button>
-              {ciFeedback && (
-                <div style={{ background: `rgba(${hexRgb(c?.color||"#FFD700")},0.06)`, border: `1px solid ${c?.color}33`, borderRadius: 12, padding: 20 }}>
-                  <div style={{ fontSize: 11, color: c?.color, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 10 }}>Coach Feedback</div>
-                  <p style={{ fontSize: 14, color: "#ddd", lineHeight: 1.7, whiteSpace: "pre-wrap", margin: "0 0 14px" }}>{ciFeedback}</p>
-                  <Bar val={sc(activeId)} color={c?.color || "#FFD700"} />
-                </div>
-              )}
-            </div>
-            <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 14, padding: 18 }}>
-              <div style={{ fontSize: 11, color: "#555", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 14 }}>Recent Logs</div>
-              {recent.length === 0 && <div style={{ fontSize: 13, color: "#555" }}>No logs yet.</div>}
-              {recent.map((l, i) => (
-                <div key={i} style={{ marginBottom: 14, paddingBottom: 14, borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                    <span style={{ fontSize: 12, color: "#666" }}>{l.date}</span>
-                    <span style={{ fontSize: 12, color: l.delta >= 0 ? "#7CE8A0" : "#E87C7C" }}>{l.delta >= 0 ? "+" : ""}{l.delta}</span>
-                  </div>
-                  <p style={{ fontSize: 13, color: "#aaa", lineHeight: 1.5, margin: "0 0 4px" }}>{l.note}</p>
-                  {l.aiReply && <p style={{ fontSize: 12, color: "#666", fontStyle: "italic", margin: 0 }}>{l.aiReply.slice(0,110)}</p>}
-                </div>
-              ))}
-              <div style={{ marginTop: 14 }}>
-                <div style={{ fontSize: 11, color: "#555", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 10 }}>Other Goals</div>
-                {doneIds.filter(id => id !== activeId).map(id => {
-                  const cc = cat(id);
-                  return (
-                    <div key={id} onClick={() => { setActiveId(id); setCiNote(""); setCiMood(3); setCiFeedback(""); }}
-                      style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 0", cursor: "pointer", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
-                      <span style={{ color: cc?.color }}>{cc?.icon}</span>
-                      <span style={{ fontSize: 13, color: "#aaa" }}>{cc?.name}</span>
-                      {todayLogged(id) && <span style={{ fontSize: 11, color: "#7CE8A0", marginLeft: "auto" }}>✓ done</span>}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
     if (tab === "progress") {
       const c = cat(activeId);
       const logList = logs[activeId] || [];
       const byMonth = {};
       logList.forEach(l => { const m = l.date.slice(0,7); if (!byMonth[m]) byMonth[m] = []; byMonth[m].push(l); });
       const s = sc(activeId);
+      if (!activeId) return (
+        <div style={{ padding: "60px 26px", textAlign: "center" }}>
+          <p style={{ color: "#666" }}>Select a goal from the dashboard to view progress.</p>
+          <button onClick={() => setTab("dashboard")} style={{ marginTop: 14, background: "rgba(255,215,0,0.1)", border: "1px solid rgba(255,215,0,0.2)", borderRadius: 8, padding: "10px 20px", fontSize: 14, color: "#FFD700", cursor: "pointer", fontFamily: "Georgia,serif" }}>Go to Dashboard</button>
+        </div>
+      );
       return (
         <div style={{ padding: "34px 26px", maxWidth: 900, margin: "0 auto" }}>
           <button onClick={() => setTab("dashboard")} style={{ background: "none", border: "none", color: "#666", cursor: "pointer", fontSize: 14, fontFamily: "Georgia,serif", padding: "0 0 18px", display: "block" }}>← Back to Dashboard</button>
@@ -692,6 +933,12 @@ export default function App() {
     if (tab === "chat") {
       const c = cat(activeId);
       const msgs = chats[activeId] || [];
+      if (!activeId) return (
+        <div style={{ padding: "60px 26px", textAlign: "center" }}>
+          <p style={{ color: "#666" }}>Select a goal from the dashboard to open its coach.</p>
+          <button onClick={() => setTab("dashboard")} style={{ marginTop: 14, background: "rgba(255,215,0,0.1)", border: "1px solid rgba(255,215,0,0.2)", borderRadius: 8, padding: "10px 20px", fontSize: 14, color: "#FFD700", cursor: "pointer", fontFamily: "Georgia,serif" }}>Go to Dashboard</button>
+        </div>
+      );
       return (
         <div style={{ display: "flex", height: "calc(100vh - 58px)" }}>
           <div style={{ width: 240, borderRight: "1px solid rgba(255,255,255,0.07)", padding: 20, flexShrink: 0, overflowY: "auto" }}>
@@ -774,30 +1021,19 @@ export default function App() {
         const poly = pts.map(p => `${p.x},${p.y}`).join(" ");
         return (
           <svg width={size} height={size} style={{ overflow: "visible" }}>
-            {[25,50,75,100].map(pct => (
-              <polygon key={pct} points={gridPts(pct)} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="1" />
-            ))}
+            {[25,50,75,100].map(pct => <polygon key={pct} points={gridPts(pct)} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="1" />)}
             {doneIds.map((id, i) => {
               const angle = (i / n) * 2 * Math.PI - Math.PI / 2;
               return <line key={id} x1={cx} y1={cy} x2={cx + maxR * Math.cos(angle)} y2={cy + maxR * Math.sin(angle)} stroke="rgba(255,255,255,0.07)" strokeWidth="1" />;
             })}
             <polygon points={poly} fill="rgba(255,215,0,0.12)" stroke="#FFD700" strokeWidth="1.5" strokeLinejoin="round" />
-            {pts.map((p, i) => {
-              const c = cat(p.id);
-              return <circle key={i} cx={p.x} cy={p.y} r={4} fill={c?.color || "#FFD700"} stroke="#080808" strokeWidth="2" />;
-            })}
+            {pts.map((p, i) => { const c = cat(p.id); return <circle key={i} cx={p.x} cy={p.y} r={4} fill={c?.color || "#FFD700"} stroke="#080808" strokeWidth="2" />; })}
             {doneIds.map((id, i) => {
               const angle = (i / n) * 2 * Math.PI - Math.PI / 2;
-              const labelR = maxR + 22;
-              const lx = cx + labelR * Math.cos(angle);
-              const ly = cy + labelR * Math.sin(angle);
+              const lx = cx + (maxR + 22) * Math.cos(angle);
+              const ly = cy + (maxR + 22) * Math.sin(angle);
               const c = cat(id);
-              return (
-                <g key={id}>
-                  <text x={lx} y={ly - 4} textAnchor="middle" fill={c?.color || "#888"} fontSize="10" fontFamily="Georgia,serif">{c?.icon}</text>
-                  <text x={lx} y={ly + 10} textAnchor="middle" fill="#666" fontSize="8" fontFamily="Georgia,serif">{sc(id)}</text>
-                </g>
-              );
+              return <g key={id}><text x={lx} y={ly - 4} textAnchor="middle" fill={c?.color || "#888"} fontSize="10" fontFamily="Georgia,serif">{c?.icon}</text><text x={lx} y={ly + 10} textAnchor="middle" fill="#666" fontSize="8" fontFamily="Georgia,serif">{sc(id)}</text></g>;
             })}
             <text x={cx} y={cy - 8} textAnchor="middle" fill="#FFD700" fontSize="22" fontFamily="Georgia,serif" fontWeight="bold">{avgScore}</text>
             <text x={cx} y={cy + 10} textAnchor="middle" fill="#666" fontSize="9" fontFamily="Georgia,serif">overall</text>
@@ -805,28 +1041,8 @@ export default function App() {
         );
       };
 
-      const JourneyLine = ({ id }) => {
-        const logList = logs[id] || [];
-        if (logList.length < 2) return null;
-        const c = cat(id);
-        const w = 260, h = 50;
-        let running = 50;
-        const points = logList.slice(-12).map((l, i, arr) => {
-          running = Math.max(0, Math.min(100, running + l.delta));
-          return { x: (i / (arr.length - 1)) * w, y: h - (running / 100) * h };
-        });
-        const pathD = points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
-        return (
-          <svg width={w} height={h} style={{ overflow: "visible" }}>
-            <path d={pathD} fill="none" stroke={c?.color || "#FFD700"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            <circle cx={points[points.length-1].x} cy={points[points.length-1].y} r={3.5} fill={c?.color || "#FFD700"} />
-          </svg>
-        );
-      };
-
       return (
         <div style={{ padding: "34px 26px", maxWidth: 960, margin: "0 auto" }}>
-          <button onClick={() => setTab("dashboard")} style={{ background: "none", border: "none", color: "#666", cursor: "pointer", fontSize: 14, fontFamily: "Georgia,serif", padding: "0 0 18px", display: "block" }}>← Back to Dashboard</button>
           <div style={{ textAlign: "center", marginBottom: 40 }}>
             <div style={{ fontSize: 46, color: "#FFD700" }}>★</div>
             <h2 style={{ fontSize: 30, fontWeight: 400, color: "#fff", margin: "12px 0 8px" }}>{userName}'s Life Vision</h2>
@@ -843,10 +1059,7 @@ export default function App() {
               <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: 32, marginBottom: 36, alignItems: "center" }}>
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
                   <div style={{ fontSize: 11, color: "#666", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 4 }}>Life Wheel</div>
-                  {doneIds.length >= 3
-                    ? <LifeWheel />
-                    : <div style={{ width: 280, height: 280, display: "flex", alignItems: "center", justifyContent: "center", color: "#555", fontSize: 13, textAlign: "center", border: "1px dashed rgba(255,255,255,0.1)", borderRadius: 12 }}>Set 3+ goals to see your wheel</div>
-                  }
+                  {doneIds.length >= 3 ? <LifeWheel /> : <div style={{ width: 280, height: 280, display: "flex", alignItems: "center", justifyContent: "center", color: "#555", fontSize: 13, textAlign: "center", border: "1px dashed rgba(255,255,255,0.1)", borderRadius: 12 }}>Set 3+ goals to see your wheel</div>}
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                   <div style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 14, padding: "18px 20px" }}>
@@ -857,18 +1070,12 @@ export default function App() {
                     <div style={{ height: 10, background: "rgba(255,255,255,0.07)", borderRadius: 5, overflow: "hidden" }}>
                       <div style={{ height: "100%", width: `${avgScore}%`, background: "linear-gradient(90deg, #FFD700, #FF9500)", borderRadius: 5, transition: "width 1s ease" }} />
                     </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
-                      <span style={{ fontSize: 11, color: "#555" }}>Starting point</span>
-                      <span style={{ fontSize: 11, color: "#555" }}>Life Vision</span>
-                    </div>
                   </div>
                   {doneIds.map(id => {
-                    const c = cat(id);
-                    const s = sc(id);
-                    const logCount = (logs[id] || []).length;
+                    const c = cat(id); const s = sc(id);
                     return (
                       <div key={id} style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                        <span style={{ color: c?.color, fontSize: 16, width: 20, textAlign: "center", flexShrink: 0 }}>{c?.icon}</span>
+                        <span style={{ color: c?.color, fontSize: 16, width: 20, flexShrink: 0 }}>{c?.icon}</span>
                         <div style={{ flex: 1 }}>
                           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
                             <span style={{ fontSize: 12, color: "#ccc" }}>{c?.name}</span>
@@ -878,10 +1085,7 @@ export default function App() {
                             <div style={{ height: "100%", width: `${s}%`, background: c?.color, borderRadius: 3, transition: "width 0.8s ease" }} />
                           </div>
                         </div>
-                        <div style={{ width: 60, flexShrink: 0 }}>
-                          <JourneyLine id={id} />
-                        </div>
-                        <span style={{ fontSize: 11, color: "#555", minWidth: 36, textAlign: "right" }}>{logCount} logs</span>
+                        <span style={{ fontSize: 11, color: "#555", minWidth: 36, textAlign: "right" }}>{(logs[id]||[]).length} logs</span>
                       </div>
                     );
                   })}
@@ -890,35 +1094,23 @@ export default function App() {
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 36 }}>
                 <div style={{ background: "rgba(124,232,160,0.05)", border: "1px solid rgba(124,232,160,0.15)", borderRadius: 14, padding: "18px 20px" }}>
                   <div style={{ fontSize: 11, color: "#7CE8A0", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 14 }}>Strongest Areas</div>
-                  {topGoals.slice(0, 3).map(id => {
-                    const c = cat(id);
-                    return (
-                      <div key={id} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-                        <span style={{ fontSize: 14, color: c?.color }}>{c?.icon}</span>
-                        <span style={{ fontSize: 13, color: "#ccc", flex: 1 }}>{c?.name}</span>
-                        <div style={{ display: "flex", gap: 2 }}>
-                          {[...Array(5)].map((_, i) => (
-                            <div key={i} style={{ width: 6, height: 6, borderRadius: "50%", background: i < Math.round(sc(id) / 20) ? c?.color : "rgba(255,255,255,0.1)" }} />
-                          ))}
-                        </div>
-                        <span style={{ fontSize: 12, color: "#7CE8A0", minWidth: 28 }}>{sc(id)}</span>
-                      </div>
-                    );
-                  })}
+                  {topGoals.slice(0, 3).map(id => { const c = cat(id); return (
+                    <div key={id} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                      <span style={{ fontSize: 14, color: c?.color }}>{c?.icon}</span>
+                      <span style={{ fontSize: 13, color: "#ccc", flex: 1 }}>{c?.name}</span>
+                      <span style={{ fontSize: 12, color: "#7CE8A0" }}>{sc(id)}</span>
+                    </div>
+                  ); })}
                 </div>
                 <div style={{ background: "rgba(232,124,124,0.05)", border: "1px solid rgba(232,124,124,0.15)", borderRadius: 14, padding: "18px 20px" }}>
                   <div style={{ fontSize: 11, color: "#E87C7C", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 14 }}>Needs Attention</div>
-                  {needsWork.map(id => {
-                    const c = cat(id);
-                    const gap = 100 - sc(id);
-                    return (
-                      <div key={id} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-                        <span style={{ fontSize: 14, color: c?.color }}>{c?.icon}</span>
-                        <span style={{ fontSize: 13, color: "#ccc", flex: 1 }}>{c?.name}</span>
-                        <span style={{ fontSize: 11, color: "#E87C7C" }}>+{gap} to go</span>
-                      </div>
-                    );
-                  })}
+                  {needsWork.map(id => { const c = cat(id); return (
+                    <div key={id} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                      <span style={{ fontSize: 14, color: c?.color }}>{c?.icon}</span>
+                      <span style={{ fontSize: 13, color: "#ccc", flex: 1 }}>{c?.name}</span>
+                      <span style={{ fontSize: 11, color: "#E87C7C" }}>+{100 - sc(id)} to go</span>
+                    </div>
+                  ); })}
                 </div>
               </div>
               {vision && (
@@ -935,111 +1127,6 @@ export default function App() {
                   </div>
                 </div>
               )}
-              <div style={{ marginBottom: 36 }}>
-                <div style={{ fontSize: 11, color: "#666", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 16, display: "flex", alignItems: "center", gap: 10 }}>
-                  <span style={{ flex: 1, height: 1, background: "rgba(255,255,255,0.06)" }} />
-                  Your Path Forward
-                  <span style={{ flex: 1, height: 1, background: "rgba(255,255,255,0.06)" }} />
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 14 }}>
-                  {doneIds.map(id => {
-                    const c = cat(id);
-                    const s = sc(id);
-                    const logCount = (logs[id] || []).length;
-                    const lastLog = (logs[id] || []).slice(-1)[0];
-                    const phase = s < 30 ? "Starting Out" : s < 60 ? "Building Momentum" : s < 80 ? "Accelerating" : "Mastery Zone";
-                    const phaseColor = s < 30 ? "#E87C7C" : s < 60 ? "#E8D07C" : s < 80 ? "#7CB9E8" : "#7CE8A0";
-                    const suggestion = s < 30
-                      ? `Focus on showing up consistently. Even small daily actions compound over time.`
-                      : s < 60
-                      ? `You are building momentum. Push through resistance — the next 20 points will feel the hardest.`
-                      : s < 80
-                      ? `You are in flow. This is where real transformation happens. Do not slow down now.`
-                      : `You are in the mastery zone. Raise the standard — what does 110% look like for this goal?`;
-                    return (
-                      <div key={id} style={{ background: "rgba(255,255,255,0.02)", border: `1px solid ${c?.color}22`, borderRadius: 14, padding: "18px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 10, justifyContent: "space-between" }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            <span style={{ color: c?.color, fontSize: 18 }}>{c?.icon}</span>
-                            <span style={{ fontSize: 13, color: "#ddd" }}>{c?.name}</span>
-                          </div>
-                          <span style={{ fontSize: 10, background: phaseColor + "22", color: phaseColor, border: `1px solid ${phaseColor}44`, borderRadius: 20, padding: "2px 10px" }}>{phase}</span>
-                        </div>
-                        <div style={{ position: "relative", height: 6, background: "rgba(255,255,255,0.07)", borderRadius: 3, overflow: "hidden" }}>
-                          <div style={{ position: "absolute", left: 0, top: 0, height: "100%", width: `${s}%`, background: `linear-gradient(90deg, ${c?.color}88, ${c?.color})`, borderRadius: 3, transition: "width 0.8s ease" }} />
-                        </div>
-                        <div style={{ display: "flex", justifyContent: "space-between" }}>
-                          <span style={{ fontSize: 11, color: "#555" }}>Now: {s}/100</span>
-                          <span style={{ fontSize: 11, color: "#555" }}>{logCount} check-ins</span>
-                          <span style={{ fontSize: 11, color: "#FFD700" }}>Target: 100</span>
-                        </div>
-                        <p style={{ fontSize: 13, color: "#aaa", lineHeight: 1.6, margin: 0, padding: "10px 12px", background: "rgba(255,255,255,0.03)", borderRadius: 8, borderLeft: `2px solid ${c?.color}` }}>
-                          {suggestion}
-                        </p>
-                        {lastLog && (
-                          <div style={{ fontSize: 11, color: "#555", display: "flex", alignItems: "center", gap: 6 }}>
-                            <span style={{ color: lastLog.delta >= 0 ? "#7CE8A0" : "#E87C7C" }}>Last check-in {lastLog.date}</span>
-                            <span style={{ color: lastLog.delta >= 0 ? "#7CE8A0" : "#E87C7C", marginLeft: "auto" }}>{lastLog.delta >= 0 ? "+" : ""}{lastLog.delta} pts</span>
-                          </div>
-                        )}
-                        <button onClick={() => { setActiveId(id); setCiNote(""); setCiMood(3); setCiFeedback(""); setTab("checkin"); }}
-                          style={{ background: `rgba(${hexRgb(c?.color||"#FFD700")},0.1)`, border: `1px solid ${c?.color}33`, borderRadius: 8, padding: "8px", fontSize: 12, color: c?.color, cursor: "pointer", fontFamily: "Georgia,serif", marginTop: 2 }}>
-                          Log today's progress
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-              {doneIds.some(id => (logs[id]||[]).length >= 2) && (
-                <div style={{ marginBottom: 36, background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 14, padding: "22px 24px" }}>
-                  <div style={{ fontSize: 11, color: "#666", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 20 }}>Score Journey Per Goal</div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                    {doneIds.filter(id => (logs[id]||[]).length >= 2).map(id => {
-                      const c = cat(id);
-                      const logList = logs[id] || [];
-                      const recent = logList.slice(-14);
-                      const w = 100;
-                      const h = 36;
-                      let running = 50;
-                      const pts = recent.map((l, i) => {
-                        running = Math.max(0, Math.min(100, running + l.delta));
-                        return { x: (i / Math.max(recent.length - 1, 1)) * w, y: h - (running / 100) * h, s: running };
-                      });
-                      const pathD = pts.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
-                      const areaD = `${pathD} L ${pts[pts.length-1].x} ${h} L 0 ${h} Z`;
-                      const trend = pts.length > 1 ? pts[pts.length-1].s - pts[0].s : 0;
-                      return (
-                        <div key={id} style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                          <div style={{ width: 100, flexShrink: 0 }}>
-                            <div style={{ fontSize: 11, color: c?.color, marginBottom: 2 }}>{c?.icon} {c?.name}</div>
-                            <div style={{ fontSize: 10, color: trend >= 0 ? "#7CE8A0" : "#E87C7C" }}>
-                              {trend >= 0 ? "↑" : "↓"} {Math.abs(trend)} pts over {recent.length} logs
-                            </div>
-                          </div>
-                          <div style={{ flex: 1 }}>
-                            <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ display: "block" }}>
-                              <defs>
-                                <linearGradient id={`g${id}`} x1="0" y1="0" x2="0" y2="1">
-                                  <stop offset="0%" stopColor={c?.color} stopOpacity="0.2" />
-                                  <stop offset="100%" stopColor={c?.color} stopOpacity="0" />
-                                </linearGradient>
-                              </defs>
-                              <path d={areaD} fill={`url(#g${id})`} />
-                              <path d={pathD} fill="none" stroke={c?.color} strokeWidth="1.5" />
-                              <circle cx={pts[pts.length-1].x} cy={pts[pts.length-1].y} r="2.5" fill={c?.color} />
-                            </svg>
-                          </div>
-                          <div style={{ width: 42, flexShrink: 0, textAlign: "right" }}>
-                            <div style={{ fontSize: 18, color: c?.color, fontWeight: 700, lineHeight: 1 }}>{sc(id)}</div>
-                            <div style={{ fontSize: 10, color: "#555" }}>/100</div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
             </div>
           )}
           <div style={{ display: "flex", gap: 10, marginTop: 8, marginBottom: 26 }}>
@@ -1047,11 +1134,6 @@ export default function App() {
               {vision ? "Regenerate Vision" : "Generate Life Vision"}
             </button>
             {vision && <button onClick={() => navigator.clipboard?.writeText(vision)} style={{ background: "transparent", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 9, padding: "12px 18px", fontSize: 14, color: "#aaa", cursor: "pointer", fontFamily: "Georgia,serif" }}>Copy Text</button>}
-          </div>
-          <div style={{ padding: "16px 20px", background: "rgba(255,215,0,0.05)", border: "1px solid rgba(255,215,0,0.15)", borderRadius: 12 }}>
-            <div style={{ fontSize: 13, color: "#888", lineHeight: 1.6 }}>
-              Have questions about your Life Vision? Click the Coach button in the bottom-right corner.
-            </div>
           </div>
         </div>
       );
