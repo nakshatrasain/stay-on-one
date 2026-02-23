@@ -118,164 +118,480 @@ function Bar({ val, color }) {
 function LandingPage({ onEnter }) {
   const [nameInput, setNameInput] = useState("");
   const [showName, setShowName] = useState(false);
+  const [animatedPcts, setAnimatedPcts] = useState([0, 0, 0, 0]);
+  const [curveVisible, setCurveVisible] = useState(false);
+  const [activeStep, setActiveStep] = useState(0);
+  const curveRef = useRef(null);
 
-  const principles = [
-    { icon: "◎", text: "Most people fail not from lack of effort, but from divided attention." },
-    { icon: "◈", text: "One goal, compounded daily, beats ten goals pursued half-heartedly." },
-    { icon: "★", text: "The life you want is built in the ordinary moments you track." },
+  // Hero rings animate on load
+  useEffect(() => {
+    const targets = [72, 48, 85, 61];
+    const timers = targets.map((t, i) =>
+      setTimeout(() => {
+        setAnimatedPcts(prev => { const n = [...prev]; n[i] = t; return n; });
+      }, 300 + i * 180)
+    );
+    return () => timers.forEach(clearTimeout);
+  }, []);
+
+  // 3-step animation cycles
+  useEffect(() => {
+    const t = setInterval(() => setActiveStep(s => (s + 1) % 3), 2000);
+    return () => clearInterval(t);
+  }, []);
+
+  // Score curve animates on scroll into view
+  useEffect(() => {
+    const el = curveRef.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(([e]) => { if (e.isIntersecting) setCurveVisible(true); }, { threshold: 0.3 });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
+
+  const heroRings = [
+    { label: "Health", color: "#E8A87C", icon: "◎" },
+    { label: "Career", color: "#E87C7C", icon: "▲" },
+    { label: "Finance", color: "#7CE8A0", icon: "◇" },
+    { label: "Relationships", color: "#E87CA0", icon: "◯" },
   ];
 
-  const features = [
-    { icon: "◎", label: "12 Life Categories", desc: "Every dimension of a complete human life, from health to spirit to wealth." },
-    { icon: "📊", label: "Daily Check-in", desc: "Log what happened, get AI feedback, watch your score move in real time." },
-    { icon: "🧠", label: "AI Coach", desc: "A coach that knows your goals, your history, and what you need to hear." },
-    { icon: "★", label: "Life Vision", desc: "An AI-generated manifesto that ties all your goals into one north star." },
+  // Life Wheel demo (static 50% for all)
+  const DemoWheel = () => {
+    const size = 320, cx = 160, cy = 160, maxR = 120;
+    const demoPcts = [72, 48, 85, 61, 55, 78, 42, 66, 53, 70, 58, 80];
+    const pts = CATS.map((c, i) => {
+      const angle = (i / CATS.length) * 2 * Math.PI - Math.PI / 2;
+      const r = (demoPcts[i] / 100) * maxR;
+      return { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) };
+    });
+    const gridPts = (pct) => CATS.map((_, i) => {
+      const angle = (i / CATS.length) * 2 * Math.PI - Math.PI / 2;
+      const r = (pct / 100) * maxR;
+      return `${cx + r * Math.cos(angle)},${cy + r * Math.sin(angle)}`;
+    }).join(" ");
+    const poly = pts.map(p => `${p.x},${p.y}`).join(" ");
+    return (
+      <svg width={size} height={size} style={{ overflow: "visible", filter: "drop-shadow(0 0 40px rgba(255,215,0,0.15))" }}>
+        {[25, 50, 75, 100].map(pct => (
+          <polygon key={pct} points={gridPts(pct)} fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
+        ))}
+        {CATS.map((c, i) => {
+          const angle = (i / CATS.length) * 2 * Math.PI - Math.PI / 2;
+          return <line key={i} x1={cx} y1={cy} x2={cx + maxR * Math.cos(angle)} y2={cy + maxR * Math.sin(angle)} stroke="rgba(255,255,255,0.06)" strokeWidth="1" />;
+        })}
+        <polygon points={poly} fill="rgba(255,215,0,0.1)" stroke="#FFD700" strokeWidth="1.5" strokeLinejoin="round" />
+        {CATS.map((c, i) => {
+          const angle = (i / CATS.length) * 2 * Math.PI - Math.PI / 2;
+          const lx = cx + (maxR + 26) * Math.cos(angle);
+          const ly = cy + (maxR + 26) * Math.sin(angle);
+          return (
+            <g key={i}>
+              <text x={lx} y={ly - 3} textAnchor="middle" fill={c.color} fontSize="11" fontFamily="Georgia,serif">{c.icon}</text>
+              <text x={lx} y={ly + 11} textAnchor="middle" fill="#555" fontSize="8" fontFamily="Georgia,serif">{demoPcts[i]}</text>
+            </g>
+          );
+        })}
+        {pts.map((p, i) => (
+          <circle key={i} cx={p.x} cy={p.y} r={3.5} fill={CATS[i].color} stroke="#080808" strokeWidth="2" />
+        ))}
+        <text x={cx} y={cy - 6} textAnchor="middle" fill="#FFD700" fontSize="24" fontFamily="Georgia,serif" fontWeight="bold">64</text>
+        <text x={cx} y={cy + 12} textAnchor="middle" fill="#555" fontSize="9" fontFamily="Georgia,serif">overall</text>
+      </svg>
+    );
+  };
+
+  // 90-day score curve
+  const ScoreCurve = () => {
+    const w = 500, h = 120;
+    const rawPoints = [50,48,51,49,52,54,51,53,56,54,57,55,58,60,57,59,62,61,63,65,62,64,67,65,68,70,67,69,72,71,73,75,72,74,77,75,78,80,77,79,82,80,83,85,82,84,87,85,88,90];
+    const n = rawPoints.length;
+    const pts = rawPoints.map((v, i) => ({
+      x: (i / (n - 1)) * w,
+      y: h - ((v - 44) / 50) * h,
+    }));
+    const pathD = pts.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
+    const areaD = `${pathD} L ${w} ${h} L 0 ${h} Z`;
+    const visiblePts = curveVisible ? pts : pts.slice(0, 1);
+    const visiblePath = visiblePts.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
+    return (
+      <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ display: "block" }}>
+        <defs>
+          <linearGradient id="curveGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#FFD700" stopOpacity="0.25" />
+            <stop offset="100%" stopColor="#FFD700" stopOpacity="0" />
+          </linearGradient>
+          <clipPath id="curveClip">
+            <rect x="0" y="0" width={curveVisible ? w : 0} height={h} style={{ transition: "width 2.5s ease" }} />
+          </clipPath>
+        </defs>
+        <path d={areaD} fill="url(#curveGrad)" clipPath="url(#curveClip)" />
+        <path d={pathD} fill="none" stroke="#FFD700" strokeWidth="2" strokeLinecap="round" clipPath="url(#curveClip)" style={{ transition: "all 2.5s ease" }} />
+        <circle cx={pts[pts.length - 1].x} cy={pts[pts.length - 1].y} r={5} fill="#FFD700" style={{ opacity: curveVisible ? 1 : 0, transition: "opacity 0.5s ease 2.3s" }} />
+      </svg>
+    );
+  };
+
+  const NameInput = () => (
+    <div style={{ display: "flex", gap: 10, maxWidth: 420, margin: "0 auto" }}>
+      <input autoFocus value={nameInput} onChange={e => setNameInput(e.target.value)}
+        onKeyDown={e => e.key === "Enter" && nameInput.trim() && onEnter(nameInput.trim())}
+        placeholder="What's your name?"
+        style={{ flex: 1, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 10, padding: "14px 18px", fontSize: 16, color: "#fff", fontFamily: "Georgia,serif", outline: "none" }} />
+      <button onClick={() => nameInput.trim() && onEnter(nameInput.trim())} disabled={!nameInput.trim()}
+        style={{ background: nameInput.trim() ? "#FFD700" : "rgba(255,215,0,0.2)", color: nameInput.trim() ? "#000" : "#666", border: "none", borderRadius: 10, padding: "14px 24px", fontSize: 16, fontFamily: "Georgia,serif", fontWeight: 700, cursor: nameInput.trim() ? "pointer" : "default", transition: "all 0.2s" }}>
+        Begin
+      </button>
+    </div>
+  );
+
+  const steps = [
+    { num: "01", label: "Set your goals", desc: "One goal per life area. Specific, measurable, yours.", icon: "◆" },
+    { num: "02", label: "Check in daily", desc: "Two minutes. What happened. How you feel. Done.", icon: "◎" },
+    { num: "03", label: "Get coached", desc: "AI feedback that knows your history and patterns.", icon: "★" },
   ];
 
   return (
     <div style={{ minHeight: "100vh", background: "#080808", fontFamily: "Georgia, serif", color: "#e0e0e0" }}>
+      <style>{`
+        html, body { background: #080808 !important; margin: 0; padding: 0; }
+        * { box-sizing: border-box; }
+        @keyframes pulse { 0%,100%{opacity:0.6} 50%{opacity:1} }
+        @keyframes fadeUp { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+        @keyframes sooSpin { to{transform:rotate(360deg)} }
+        .landing-section { background: #080808; }
+        .landing-section-alt { background: #0d0d0d; }
+      `}</style>
 
-      {/* Nav */}
-      <div style={{ padding: "22px 40px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+      {/* ── NAV ── */}
+      <div className="landing-section" style={{ padding: "22px 40px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.07)", position: "sticky", top: 0, zIndex: 50, backdropFilter: "blur(16px)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{ color: "#FFD700", fontSize: 20 }}>★</span>
           <span style={{ fontSize: 16, color: "#fff" }}>Stay on One</span>
         </div>
-        <button onClick={() => setShowName(true)} style={{ background: "rgba(255,215,0,0.1)", border: "1px solid rgba(255,215,0,0.3)", borderRadius: 8, padding: "8px 20px", fontSize: 13, color: "#FFD700", cursor: "pointer", fontFamily: "Georgia,serif" }}>
+        <button onClick={() => setShowName(true)} style={{ background: "rgba(255,215,0,0.1)", border: "1px solid rgba(255,215,0,0.3)", borderRadius: 8, padding: "8px 22px", fontSize: 13, color: "#FFD700", cursor: "pointer", fontFamily: "Georgia,serif", transition: "all 0.2s" }}>
           Begin →
         </button>
       </div>
 
-      {/* Hero */}
-      <div style={{ maxWidth: 720, margin: "0 auto", padding: "100px 40px 80px", textAlign: "center" }}>
-        <div style={{ fontSize: 13, color: "#555", letterSpacing: "0.2em", textTransform: "uppercase", marginBottom: 28 }}>Inspired by Paul Graham</div>
-        <h1 style={{ fontSize: 52, fontWeight: 400, color: "#fff", lineHeight: 1.2, margin: "0 0 28px" }}>
-          The only thing that<br />
-          <span style={{ color: "#FFD700" }}>compounds is consistency.</span>
-        </h1>
-        <p style={{ fontSize: 18, color: "#888", lineHeight: 1.8, margin: "0 0 48px", maxWidth: 540, marginLeft: "auto", marginRight: "auto" }}>
-          Most productivity systems fail because they ask you to track everything. Stay on One asks you to track one thing per life area — and actually do it every day.
-        </p>
-        {!showName ? (
-          <button onClick={() => setShowName(true)} style={{ background: "#FFD700", color: "#000", border: "none", borderRadius: 10, padding: "16px 40px", fontSize: 17, fontFamily: "Georgia,serif", fontWeight: 700, cursor: "pointer", boxShadow: "0 4px 30px rgba(255,215,0,0.3)" }}>
-            Start Building Your Life
-          </button>
-        ) : (
-          <div style={{ display: "flex", gap: 10, maxWidth: 420, margin: "0 auto" }}>
-            <input autoFocus value={nameInput} onChange={e => setNameInput(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && nameInput.trim() && onEnter(nameInput.trim())}
-              placeholder="What's your name?"
-              style={{ flex: 1, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 10, padding: "14px 18px", fontSize: 16, color: "#fff", fontFamily: "Georgia,serif", outline: "none" }} />
-            <button onClick={() => nameInput.trim() && onEnter(nameInput.trim())} disabled={!nameInput.trim()}
-              style={{ background: nameInput.trim() ? "#FFD700" : "rgba(255,215,0,0.2)", color: nameInput.trim() ? "#000" : "#666", border: "none", borderRadius: 10, padding: "14px 24px", fontSize: 16, fontFamily: "Georgia,serif", fontWeight: 700, cursor: nameInput.trim() ? "pointer" : "default" }}>
-              Begin
-            </button>
+      {/* ── HERO ── */}
+      <div className="landing-section" style={{ padding: "80px 40px 70px" }}>
+        <div style={{ maxWidth: 1100, margin: "0 auto", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 80, alignItems: "center" }}>
+          {/* Left — copy */}
+          <div style={{ animation: "fadeUp 0.8s ease both" }}>
+            <div style={{ fontSize: 11, color: "#FFD700", letterSpacing: "0.22em", textTransform: "uppercase", marginBottom: 22, opacity: 0.7 }}>For the ones doing it alone</div>
+            <h1 style={{ fontSize: 50, fontWeight: 400, color: "#fff", lineHeight: 1.18, margin: "0 0 26px" }}>
+              You're not lazy.<br />
+              <span style={{ color: "#FFD700" }}>You just have no one<br />to be accountable to.</span>
+            </h1>
+            <p style={{ fontSize: 17, color: "#888", lineHeight: 1.85, margin: "0 0 16px" }}>
+              Your partner has their own problems. Your friends don't want to hear it every day. Your goals sit in your head with nowhere to go — and slowly, quietly, you start drifting.
+            </p>
+            <p style={{ fontSize: 17, color: "#aaa", lineHeight: 1.85, margin: "0 0 40px" }}>
+              Stay on One is the accountability partner that shows up every single day. It remembers what you said yesterday. It notices when you're slipping. It tells you the truth — without judgment, without distraction, without its own agenda.
+            </p>
+            {!showName ? (
+              <button onClick={() => setShowName(true)} style={{ background: "#FFD700", color: "#000", border: "none", borderRadius: 10, padding: "16px 38px", fontSize: 17, fontFamily: "Georgia,serif", fontWeight: 700, cursor: "pointer", boxShadow: "0 4px 30px rgba(255,215,0,0.25)", transition: "all 0.2s" }}>
+                Meet your accountability partner →
+              </button>
+            ) : (
+              <NameInput />
+            )}
+            <div style={{ fontSize: 12, color: "#444", marginTop: 16 }}>Free · Private · No sign-up required · Your data stays on your device</div>
           </div>
-        )}
-      </div>
-
-      {/* Divider quote */}
-      <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", borderBottom: "1px solid rgba(255,255,255,0.06)", padding: "40px", textAlign: "center", background: "rgba(255,215,0,0.02)" }}>
-        <p style={{ fontSize: 20, color: "#aaa", fontStyle: "italic", margin: 0, maxWidth: 640, marginLeft: "auto", marginRight: "auto", lineHeight: 1.7 }}>
-          "The way to do really good work is to stay on one thing long enough that you go from knowing nothing to knowing something, and from knowing something to knowing more than anyone else."
-        </p>
-        <div style={{ fontSize: 13, color: "#555", marginTop: 16 }}>— Paul Graham</div>
-      </div>
-
-      {/* How it works */}
-      <div style={{ maxWidth: 800, margin: "0 auto", padding: "90px 40px" }}>
-        <div style={{ fontSize: 11, color: "#555", letterSpacing: "0.2em", textTransform: "uppercase", textAlign: "center", marginBottom: 14 }}>The Concept</div>
-        <h2 style={{ fontSize: 32, fontWeight: 400, color: "#fff", textAlign: "center", margin: "0 0 60px" }}>Why one goal per area works</h2>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 40 }}>
-          {principles.map((p, i) => (
-            <div key={i} style={{ textAlign: "center" }}>
-              <div style={{ fontSize: 28, color: "#FFD700", marginBottom: 16 }}>{p.icon}</div>
-              <p style={{ fontSize: 15, color: "#999", lineHeight: 1.7, margin: 0 }}>{p.text}</p>
+          {/* Right — animated rings */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 20, animation: "fadeUp 0.8s ease 0.2s both" }}>
+            <div style={{ fontSize: 11, color: "#555", letterSpacing: "0.15em", textTransform: "uppercase", textAlign: "center", marginBottom: 4 }}>Your life, scored daily</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+              {heroRings.map((ring, i) => (
+                <div key={i} style={{ background: "rgba(255,255,255,0.03)", border: `1px solid ${ring.color}33`, borderRadius: 16, padding: "20px", display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
+                  <div style={{ position: "relative", width: 72, height: 72 }}>
+                    <svg width={72} height={72} style={{ transform: "rotate(-90deg)", display: "block" }}>
+                      <circle cx={36} cy={36} r={30} fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth={5} />
+                      <circle cx={36} cy={36} r={30} fill="none" stroke={ring.color} strokeWidth={5}
+                        strokeDasharray={2 * Math.PI * 30}
+                        strokeDashoffset={2 * Math.PI * 30 - (animatedPcts[i] / 100) * 2 * Math.PI * 30}
+                        strokeLinecap="round"
+                        style={{ transition: `stroke-dashoffset 1.2s ease ${0.4 + i * 0.2}s` }} />
+                    </svg>
+                    <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+                      <span style={{ fontSize: 14, color: ring.color, lineHeight: 1 }}>{animatedPcts[i]}</span>
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 12, color: "#aaa", textAlign: "center" }}>{ring.icon} {ring.label}</div>
+                  <div style={{ width: "100%", height: 3, background: "rgba(255,255,255,0.06)", borderRadius: 2, overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: `${animatedPcts[i]}%`, background: ring.color, borderRadius: 2, transition: `width 1.2s ease ${0.4 + i * 0.2}s` }} />
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
+            <div style={{ textAlign: "center", fontSize: 12, color: "#444", fontStyle: "italic" }}>Scores move based on what you actually do — not what you plan to do</div>
+          </div>
         </div>
       </div>
 
-      {/* Psychology section */}
-      <div style={{ background: "rgba(255,255,255,0.02)", borderTop: "1px solid rgba(255,255,255,0.06)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-        <div style={{ maxWidth: 800, margin: "0 auto", padding: "90px 40px" }}>
-          <div style={{ fontSize: 11, color: "#555", letterSpacing: "0.2em", textTransform: "uppercase", textAlign: "center", marginBottom: 14 }}>The Psychology</div>
-          <h2 style={{ fontSize: 32, fontWeight: 400, color: "#fff", textAlign: "center", margin: "0 0 50px" }}>Built on how humans actually change</h2>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 30 }}>
+      {/* ── SOCIAL PROOF QUOTE BAR ── */}
+      <div style={{ background: "rgba(255,215,0,0.04)", borderTop: "1px solid rgba(255,215,0,0.1)", borderBottom: "1px solid rgba(255,215,0,0.1)", padding: "24px 40px", textAlign: "center" }}>
+        <p style={{ fontSize: 16, color: "#888", fontStyle: "italic", margin: 0 }}>
+          "The most honest conversation you'll have today might be with your Coach."
+        </p>
+      </div>
+
+      {/* ── THE PROBLEM ── */}
+      <div className="landing-section-alt" style={{ padding: "90px 40px" }}>
+        <div style={{ maxWidth: 860, margin: "0 auto", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 60, alignItems: "center" }}>
+          <div>
+            <div style={{ fontSize: 11, color: "#555", letterSpacing: "0.2em", textTransform: "uppercase", marginBottom: 18 }}>The Problem</div>
+            <h2 style={{ fontSize: 36, fontWeight: 400, color: "#fff", margin: "0 0 24px", lineHeight: 1.25 }}>Everyone around you<br />is distracted.</h2>
+            <p style={{ fontSize: 16, color: "#888", lineHeight: 1.85, margin: "0 0 18px" }}>
+              We live in the age of infinite content and zero accountability. You can watch 4 hours of someone else's life while your own goals quietly die.
+            </p>
+            <p style={{ fontSize: 16, color: "#888", lineHeight: 1.85, margin: "0 0 18px" }}>
+              You know exactly what you need to do. The problem is there's no one standing with you while you do it. Not every day. Not with patience. Not with memory of what you said last Tuesday.
+            </p>
+            <p style={{ fontSize: 17, color: "#ddd", lineHeight: 1.85, margin: 0, fontStyle: "italic" }}>
+              Until now.
+            </p>
+          </div>
+          {/* Distraction visual */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {[
-              { title: "Identity-based habits", body: "Every time you check in, you cast a vote for the person you want to become. The score isn't vanity — it's evidence of identity shift. James Clear calls this the most powerful driver of lasting change." },
-              { title: "Compounding feedback loops", body: "Kahneman showed that we make better decisions when we slow down and reflect. The daily check-in forces System 2 thinking — deliberate, honest, and forward-looking — instead of drifting through days on autopilot." },
-              { title: "Specificity over motivation", body: "Vague goals like 'get healthy' fail because the brain cannot act on them. One specific goal per life area gives your mind a clear target. Specificity activates the prefrontal cortex — your planning brain." },
-              { title: "Accountability changes behaviour", body: "Research consistently shows that people who track their progress and report it to someone — even an AI — are significantly more likely to follow through. Observation creates intention." },
+              { label: "Instagram scroll", time: "2h 14m", color: "#E87C7C", pct: 85 },
+              { label: "Working on your goal", time: "0m", color: "#7CE8A0", pct: 2 },
+              { label: "YouTube autoplay", time: "1h 42m", color: "#E8A87C", pct: 68 },
+              { label: "Daily check-in", time: "2 min", color: "#FFD700", pct: 8 },
             ].map((item, i) => (
-              <div key={i} style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 14, padding: "24px 26px" }}>
-                <div style={{ fontSize: 15, color: "#FFD700", marginBottom: 10 }}>{item.title}</div>
-                <p style={{ fontSize: 14, color: "#888", lineHeight: 1.75, margin: 0 }}>{item.body}</p>
+              <div key={i} style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 10, padding: "14px 18px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                  <span style={{ fontSize: 13, color: "#ccc" }}>{item.label}</span>
+                  <span style={{ fontSize: 13, color: item.color }}>{item.time}</span>
+                </div>
+                <div style={{ height: 4, background: "rgba(255,255,255,0.06)", borderRadius: 2, overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: `${item.pct}%`, background: item.color, borderRadius: 2 }} />
+                </div>
+              </div>
+            ))}
+            <div style={{ fontSize: 12, color: "#444", textAlign: "center", fontStyle: "italic" }}>The average person's day</div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── WHAT IT IS — 3 STEPS ── */}
+      <div className="landing-section" style={{ padding: "90px 40px" }}>
+        <div style={{ maxWidth: 900, margin: "0 auto" }}>
+          <div style={{ fontSize: 11, color: "#555", letterSpacing: "0.2em", textTransform: "uppercase", textAlign: "center", marginBottom: 14 }}>What is Stay on One</div>
+          <h2 style={{ fontSize: 36, fontWeight: 400, color: "#fff", textAlign: "center", margin: "0 0 16px" }}>A daily ritual for every area of your life.</h2>
+          <p style={{ fontSize: 16, color: "#888", textAlign: "center", margin: "0 auto 60px", maxWidth: 560, lineHeight: 1.75 }}>
+            12 life areas. One goal each. Two minutes a day. An AI Coach that knows your full story and tells you the truth.
+          </p>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 20 }}>
+            {steps.map((s, i) => (
+              <div key={i} style={{ background: activeStep === i ? "rgba(255,215,0,0.06)" : "rgba(255,255,255,0.02)", border: `1px solid ${activeStep === i ? "rgba(255,215,0,0.25)" : "rgba(255,255,255,0.07)"}`, borderRadius: 16, padding: "28px 24px", transition: "all 0.4s ease", position: "relative", overflow: "hidden" }}>
+                {activeStep === i && <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: "linear-gradient(90deg, transparent, #FFD700, transparent)" }} />}
+                <div style={{ fontSize: 11, color: activeStep === i ? "#FFD700" : "#444", letterSpacing: "0.15em", marginBottom: 16 }}>{s.num}</div>
+                <div style={{ fontSize: 28, color: activeStep === i ? "#FFD700" : "#555", marginBottom: 14, transition: "color 0.4s" }}>{s.icon}</div>
+                <div style={{ fontSize: 16, color: activeStep === i ? "#fff" : "#aaa", marginBottom: 10, transition: "color 0.4s" }}>{s.label}</div>
+                <div style={{ fontSize: 13, color: "#666", lineHeight: 1.65 }}>{s.desc}</div>
               </div>
             ))}
           </div>
         </div>
       </div>
 
-      {/* Features */}
-      <div style={{ maxWidth: 800, margin: "0 auto", padding: "90px 40px" }}>
-        <div style={{ fontSize: 11, color: "#555", letterSpacing: "0.2em", textTransform: "uppercase", textAlign: "center", marginBottom: 14 }}>What's Inside</div>
-        <h2 style={{ fontSize: 32, fontWeight: 400, color: "#fff", textAlign: "center", margin: "0 0 50px" }}>Everything you need. Nothing you don't.</h2>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-          {features.map((f, i) => (
-            <div key={i} style={{ display: "flex", gap: 16, padding: "22px 24px", background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 14 }}>
-              <div style={{ fontSize: 24, flexShrink: 0, marginTop: 2 }}>{f.icon}</div>
-              <div>
-                <div style={{ fontSize: 15, color: "#ddd", marginBottom: 6 }}>{f.label}</div>
-                <div style={{ fontSize: 13, color: "#777", lineHeight: 1.6 }}>{f.desc}</div>
+      {/* ── EMOTIONAL HOOK — 4 CARDS ── */}
+      <div className="landing-section-alt" style={{ padding: "90px 40px" }}>
+        <div style={{ maxWidth: 900, margin: "0 auto" }}>
+          <div style={{ fontSize: 11, color: "#555", letterSpacing: "0.2em", textTransform: "uppercase", textAlign: "center", marginBottom: 14 }}>Your Accountability Partner</div>
+          <h2 style={{ fontSize: 36, fontWeight: 400, color: "#fff", textAlign: "center", margin: "0 0 16px" }}>What no one else in your life will do.</h2>
+          <p style={{ fontSize: 16, color: "#888", textAlign: "center", margin: "0 auto 56px", maxWidth: 540, lineHeight: 1.75 }}>
+            Not therapy. Not a journal. Not a productivity app. Something that actually shows up for you — every day, without fail.
+          </p>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }}>
+            {[
+              {
+                icon: "◈", color: "#7CB9E8", title: "It remembers everything",
+                body: "Every check-in you've ever done. Every promise you made to yourself. Every time you said \"I'll do better tomorrow.\" Your Coach holds all of it — and brings it up when it matters.",
+                visual: (
+                  <div style={{ display: "flex", gap: 6, marginTop: 16 }}>
+                    {["Jan 14", "Jan 15", "Jan 16", "Today"].map((d, i) => (
+                      <div key={i} style={{ flex: 1, background: i === 3 ? "rgba(124,185,232,0.2)" : "rgba(255,255,255,0.04)", border: `1px solid ${i === 3 ? "rgba(124,185,232,0.4)" : "rgba(255,255,255,0.08)"}`, borderRadius: 6, padding: "6px 4px", textAlign: "center" }}>
+                        <div style={{ fontSize: 9, color: i === 3 ? "#7CB9E8" : "#555" }}>{d}</div>
+                        <div style={{ fontSize: 14, marginTop: 3 }}>{i === 3 ? "📝" : "✓"}</div>
+                      </div>
+                    ))}
+                  </div>
+                )
+              },
+              {
+                icon: "◉", color: "#C9A7E8", title: "It tells you the truth",
+                body: "No one in your life will tell you that you've been making the same excuse for three weeks. Your Coach will. Not to make you feel bad — to help you see the pattern you can't see from inside it.",
+                visual: (
+                  <div style={{ marginTop: 16, background: "rgba(201,167,232,0.08)", border: "1px solid rgba(201,167,232,0.2)", borderRadius: 8, padding: "10px 12px" }}>
+                    <div style={{ fontSize: 11, color: "#C9A7E8", marginBottom: 4 }}>Coach · 3 weeks of data</div>
+                    <div style={{ fontSize: 12, color: "#888", lineHeight: 1.5, fontStyle: "italic" }}>"This is the fourth time you've mentioned being tired. Let's talk about what's actually going on."</div>
+                  </div>
+                )
+              },
+              {
+                icon: "✦", color: "#7CE8C3", title: "It never has a bad day",
+                body: "It doesn't cancel. It doesn't get tired of hearing about your fitness goal. It doesn't have its own stress bleeding into your session. It shows up every day exactly the same way — fully present, fully focused on you.",
+                visual: (
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 16, padding: "10px 14px", background: "rgba(124,232,195,0.06)", border: "1px solid rgba(124,232,195,0.15)", borderRadius: 8 }}>
+                    <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#7CE8A0", animation: "pulse 2s infinite", flexShrink: 0 }} />
+                    <div style={{ fontSize: 12, color: "#7CE8C3" }}>Coach is online · Day 1 or Day 180, same presence.</div>
+                  </div>
+                )
+              },
+              {
+                icon: "★", color: "#FFD700", title: "It's not therapy. It's not a journal.",
+                body: "Therapy looks backward. A journal doesn't talk back. Stay on One looks at where you are today and helps you take one step forward. Every single day.",
+                visual: (
+                  <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+                    {[{ l: "Therapy", s: "Past focused", x: true }, { l: "Journal", s: "No feedback", x: true }, { l: "Stay on One", s: "Daily action", x: false }].map((item, i) => (
+                      <div key={i} style={{ flex: 1, textAlign: "center", padding: "8px 6px", background: item.x ? "rgba(255,255,255,0.02)" : "rgba(255,215,0,0.08)", border: `1px solid ${item.x ? "rgba(255,255,255,0.06)" : "rgba(255,215,0,0.25)"}`, borderRadius: 8 }}>
+                        <div style={{ fontSize: 10, color: item.x ? "#555" : "#FFD700", marginBottom: 3 }}>{item.x ? "✗" : "✓"}</div>
+                        <div style={{ fontSize: 10, color: item.x ? "#555" : "#ddd" }}>{item.l}</div>
+                        <div style={{ fontSize: 9, color: "#444", marginTop: 2 }}>{item.s}</div>
+                      </div>
+                    ))}
+                  </div>
+                )
+              },
+            ].map((card, i) => (
+              <div key={i} style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 16, padding: "26px 28px" }}>
+                <div style={{ fontSize: 26, color: card.color, marginBottom: 14 }}>{card.icon}</div>
+                <div style={{ fontSize: 16, color: "#ddd", marginBottom: 12 }}>{card.title}</div>
+                <p style={{ fontSize: 14, color: "#777", lineHeight: 1.75, margin: 0 }}>{card.body}</p>
+                {card.visual}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ── LIFE WHEEL ── */}
+      <div className="landing-section" style={{ padding: "90px 40px" }}>
+        <div style={{ maxWidth: 1000, margin: "0 auto", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 70, alignItems: "center" }}>
+          <div style={{ display: "flex", justifyContent: "center" }}>
+            <DemoWheel />
+          </div>
+          <div>
+            <div style={{ fontSize: 11, color: "#555", letterSpacing: "0.2em", textTransform: "uppercase", marginBottom: 18 }}>The Framework</div>
+            <h2 style={{ fontSize: 36, fontWeight: 400, color: "#fff", margin: "0 0 20px", lineHeight: 1.25 }}>12 areas. One goal each.<br />Your whole life, finally in one place.</h2>
+            <p style={{ fontSize: 15, color: "#888", lineHeight: 1.85, margin: "0 0 18px" }}>
+              Most people have never looked at all 12 dimensions of their life at the same time. When you do, you notice things — that you've been crushing it at work while your health is a 3/10.
+            </p>
+            <p style={{ fontSize: 15, color: "#888", lineHeight: 1.85, margin: "0 0 28px" }}>
+              The Life Wheel shows you the full picture. The daily check-in helps you do something about it.
+            </p>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              {CATS.map(c => (
+                <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 10px", background: "rgba(255,255,255,0.02)", border: `1px solid ${c.color}22`, borderRadius: 8 }}>
+                  <span style={{ color: c.color, fontSize: 14 }}>{c.icon}</span>
+                  <span style={{ fontSize: 12, color: "#aaa" }}>{c.name}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── 90-DAY CURVE ── */}
+      <div className="landing-section-alt" style={{ padding: "90px 40px" }} ref={curveRef}>
+        <div style={{ maxWidth: 800, margin: "0 auto", textAlign: "center" }}>
+          <div style={{ fontSize: 11, color: "#555", letterSpacing: "0.2em", textTransform: "uppercase", marginBottom: 14 }}>The Compound Effect</div>
+          <h2 style={{ fontSize: 36, fontWeight: 400, color: "#fff", margin: "0 0 16px" }}>What 90 days of showing up looks like.</h2>
+          <p style={{ fontSize: 15, color: "#888", margin: "0 auto 48px", maxWidth: 500, lineHeight: 1.75 }}>
+            Not a straight line. Not overnight. Just one honest check-in per day, compounding into something you couldn't have imagined on day one.
+          </p>
+          <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 16, padding: "32px 36px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 24 }}>
+              <div style={{ textAlign: "left" }}>
+                <div style={{ fontSize: 12, color: "#555" }}>Day 1</div>
+                <div style={{ fontSize: 22, color: "#888" }}>50</div>
+              </div>
+              <div style={{ textAlign: "center" }}>
+                <div style={{ fontSize: 12, color: "#555" }}>Overall Score Journey</div>
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontSize: 12, color: "#555" }}>Day 90</div>
+                <div style={{ fontSize: 22, color: "#FFD700" }}>90</div>
               </div>
             </div>
-          ))}
+            <ScoreCurve />
+            <div style={{ fontSize: 12, color: "#444", marginTop: 16, fontStyle: "italic" }}>Fictional example. Your curve will be uniquely yours.</div>
+          </div>
         </div>
       </div>
 
-      {/* 12 Categories */}
-      <div style={{ background: "rgba(255,255,255,0.02)", borderTop: "1px solid rgba(255,255,255,0.06)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-        <div style={{ maxWidth: 860, margin: "0 auto", padding: "90px 40px" }}>
-          <div style={{ fontSize: 11, color: "#555", letterSpacing: "0.2em", textTransform: "uppercase", textAlign: "center", marginBottom: 14 }}>The Framework</div>
-          <h2 style={{ fontSize: 32, fontWeight: 400, color: "#fff", textAlign: "center", margin: "0 0 50px" }}>12 dimensions of a complete life</h2>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
-            {CATS.map(c => (
-              <div key={c.id} style={{ background: "rgba(255,255,255,0.02)", border: `1px solid ${c.color}33`, borderRadius: 12, padding: "16px", textAlign: "center" }}>
-                <div style={{ fontSize: 22, color: c.color, marginBottom: 8 }}>{c.icon}</div>
-                <div style={{ fontSize: 13, color: "#ccc" }}>{c.name}</div>
+      {/* ── PSYCHOLOGY ── */}
+      <div className="landing-section" style={{ padding: "90px 40px" }}>
+        <div style={{ maxWidth: 900, margin: "0 auto" }}>
+          <div style={{ fontSize: 11, color: "#555", letterSpacing: "0.2em", textTransform: "uppercase", textAlign: "center", marginBottom: 14 }}>Why It Works</div>
+          <h2 style={{ fontSize: 36, fontWeight: 400, color: "#fff", textAlign: "center", margin: "0 0 50px" }}>Built on how humans actually change.</h2>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }}>
+            {[
+              { title: "Identity over motivation", body: "Motivation fades. Identity compounds. Every time you check in, you cast a vote for who you're becoming. James Clear calls this the most powerful driver of lasting behaviour change." },
+              { title: "The observer effect", body: "Kahneman showed that when we slow down and reflect, we make dramatically better decisions. The daily check-in forces exactly that — instead of drifting through another day on autopilot." },
+              { title: "Specificity activates action", body: "Vague goals like \"get healthy\" fail because the brain cannot act on them. One specific goal per life area gives your mind a precise target and activates your planning brain." },
+              { title: "Accountability changes behaviour", body: "People who track progress and report it to someone — even an AI — are significantly more likely to follow through. The simple act of being witnessed changes how you show up." },
+            ].map((item, i) => (
+              <div key={i} style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 14, padding: "26px 28px" }}>
+                <div style={{ fontSize: 15, color: "#FFD700", marginBottom: 12 }}>{item.title}</div>
+                <p style={{ fontSize: 14, color: "#777", lineHeight: 1.8, margin: 0 }}>{item.body}</p>
               </div>
             ))}
           </div>
         </div>
       </div>
 
-      {/* Final CTA */}
-      <div style={{ maxWidth: 600, margin: "0 auto", padding: "100px 40px", textAlign: "center" }}>
-        <div style={{ fontSize: 42, color: "#FFD700", marginBottom: 24 }}>★</div>
-        <h2 style={{ fontSize: 34, fontWeight: 400, color: "#fff", margin: "0 0 18px" }}>You already know what to work on.</h2>
-        <p style={{ fontSize: 17, color: "#888", lineHeight: 1.7, margin: "0 0 40px" }}>The question is whether you will show up for it tomorrow. And the day after. And the day after that.</p>
-        {!showName ? (
-          <button onClick={() => setShowName(true)} style={{ background: "#FFD700", color: "#000", border: "none", borderRadius: 10, padding: "16px 40px", fontSize: 17, fontFamily: "Georgia,serif", fontWeight: 700, cursor: "pointer", boxShadow: "0 4px 30px rgba(255,215,0,0.3)" }}>
-            Start Today
-          </button>
-        ) : (
-          <div style={{ display: "flex", gap: 10, maxWidth: 420, margin: "0 auto" }}>
-            <input autoFocus value={nameInput} onChange={e => setNameInput(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && nameInput.trim() && onEnter(nameInput.trim())}
-              placeholder="What's your name?"
-              style={{ flex: 1, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 10, padding: "14px 18px", fontSize: 16, color: "#fff", fontFamily: "Georgia,serif", outline: "none" }} />
-            <button onClick={() => nameInput.trim() && onEnter(nameInput.trim())} disabled={!nameInput.trim()}
-              style={{ background: nameInput.trim() ? "#FFD700" : "rgba(255,215,0,0.2)", color: nameInput.trim() ? "#000" : "#666", border: "none", borderRadius: 10, padding: "14px 24px", fontSize: 16, fontFamily: "Georgia,serif", fontWeight: 700, cursor: nameInput.trim() ? "pointer" : "default" }}>
-              Begin
-            </button>
+      {/* ── PAUL GRAHAM ── */}
+      <div style={{ background: "#0a0a0a", borderTop: "1px solid rgba(255,255,255,0.07)", borderBottom: "1px solid rgba(255,255,255,0.07)", padding: "80px 40px", textAlign: "center", position: "relative", overflow: "hidden" }}>
+        <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", opacity: 0.04, pointerEvents: "none" }}>
+          <span style={{ fontSize: 400, color: "#FFD700", lineHeight: 1 }}>★</span>
+        </div>
+        <div style={{ position: "relative", maxWidth: 720, margin: "0 auto" }}>
+          <p style={{ fontSize: 22, color: "#bbb", fontStyle: "italic", lineHeight: 1.75, margin: "0 0 24px" }}>
+            "The way to do really good work is to stay on one thing long enough that you go from knowing nothing to knowing something, and from knowing something to knowing more than anyone else."
+          </p>
+          <div style={{ fontSize: 13, color: "#555", marginBottom: 28 }}>— Paul Graham</div>
+          <div style={{ fontSize: 15, color: "#666", lineHeight: 1.7 }}>
+            This app is built on that idea. Not hustle. Not hacks.<br />Just one thing, every day, long enough to matter.
           </div>
-        )}
-        <div style={{ fontSize: 12, color: "#444", marginTop: 20 }}>Free. Private. No sign-up required.</div>
+        </div>
       </div>
 
-      {/* Footer */}
-      <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", padding: "30px 40px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      {/* ── FINAL CTA ── */}
+      <div className="landing-section" style={{ padding: "100px 40px", textAlign: "center" }}>
+        <div style={{ maxWidth: 580, margin: "0 auto" }}>
+          <div style={{ position: "relative", width: 90, height: 90, margin: "0 auto 32px" }}>
+            <svg width={90} height={90} style={{ transform: "rotate(-90deg)", display: "block" }}>
+              <circle cx={45} cy={45} r={38} fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth={5} />
+              <circle cx={45} cy={45} r={38} fill="none" stroke="#FFD700" strokeWidth={5}
+                strokeDasharray={2 * Math.PI * 38}
+                strokeDashoffset={2 * Math.PI * 38 * 0.35}
+                strokeLinecap="round" />
+            </svg>
+            <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+              <span style={{ fontSize: 13, color: "#FFD700" }}>Day 1</span>
+            </div>
+          </div>
+          <h2 style={{ fontSize: 38, fontWeight: 400, color: "#fff", margin: "0 0 18px", lineHeight: 1.2 }}>You already know what to work on.</h2>
+          <p style={{ fontSize: 18, color: "#888", lineHeight: 1.75, margin: "0 0 14px" }}>The question is whether you'll have someone standing with you while you do it.</p>
+          <p style={{ fontSize: 15, color: "#666", lineHeight: 1.7, margin: "0 0 44px" }}>Start for free. No account needed. Just your name and the goal you've been putting off.</p>
+          {!showName ? (
+            <button onClick={() => setShowName(true)} style={{ background: "#FFD700", color: "#000", border: "none", borderRadius: 10, padding: "18px 44px", fontSize: 18, fontFamily: "Georgia,serif", fontWeight: 700, cursor: "pointer", boxShadow: "0 4px 40px rgba(255,215,0,0.3)", transition: "all 0.2s" }}>
+              Begin today →
+            </button>
+          ) : (
+            <NameInput />
+          )}
+          <div style={{ fontSize: 12, color: "#444", marginTop: 18 }}>Free · Private · No sign-up required · Your data stays on your device</div>
+        </div>
+      </div>
+
+      {/* ── FOOTER ── */}
+      <div style={{ background: "#080808", borderTop: "1px solid rgba(255,255,255,0.07)", padding: "28px 40px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <span style={{ color: "#FFD700" }}>★</span>
           <span style={{ fontSize: 14, color: "#444" }}>Stay on One</span>
@@ -283,7 +599,6 @@ function LandingPage({ onEnter }) {
         <div style={{ fontSize: 13, color: "#444" }}>Built for people who finish things.</div>
       </div>
 
-      <style>{`@keyframes sooSpin{to{transform:rotate(360deg)}}`}</style>
     </div>
   );
 }
