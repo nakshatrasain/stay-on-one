@@ -1,4 +1,9 @@
 import { useState, useEffect, useRef } from "react";
+import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
+
+const SUPABASE_URL = "https://dzzjnxrgvedviidmezvn.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR6empueHJndmVkdmlpZG1lenZuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE4MzczODQsImV4cCI6MjA4NzQxMzM4NH0.idPcV8GoDmuhl4f0PxqshKUdoNY9_mXkkKdg6e6ympk";
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const CATS = [
   { id: 1,  name: "Health & Fitness",  icon: "◎", color: "#E8A87C" },
@@ -34,19 +39,22 @@ const todayStr = () => new Date().toISOString().slice(0, 10);
 const monthStr = () => new Date().toISOString().slice(0, 7);
 const cat = (id) => CATS.find(c => c.id === id);
 
-const store = {
-  async get(key) {
-    try {
-      if (window.storage) { const r = await window.storage.get(key); return r ? JSON.parse(r.value) : null; }
-      const v = localStorage.getItem(key); return v ? JSON.parse(v) : null;
-    } catch { return null; }
+// ─── SUPABASE DB ──────────────────────────────────────────────────────────────
+const db = {
+  async load(userId) {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", userId)
+      .single();
+    if (error && error.code !== "PGRST116") console.error("Load error:", error);
+    return data;
   },
-  async set(key, val) {
-    try {
-      const s = JSON.stringify(val);
-      if (window.storage) await window.storage.set(key, s);
-      else localStorage.setItem(key, s);
-    } catch {}
+  async save(userId, patch) {
+    const { error } = await supabase
+      .from("profiles")
+      .upsert({ id: userId, ...patch, updated_at: new Date().toISOString() });
+    if (error) console.error("Save error:", error);
   },
 };
 
@@ -141,6 +149,324 @@ function AnimatedRing({ pct, prevPct, color, size, stroke }) {
       <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: size * 0.22, color }}>{display}</div>
     </div>
   );
+}
+
+// ─── AUTH SCREEN ──────────────────────────────────────────────────────────────
+function AuthScreen({ onAuth }) {
+  const [mode, setMode] = useState("login"); // login | signup
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
+  const handleSubmit = async () => {
+    if (!email.trim() || !password.trim()) { setError("Please enter your email and password."); return; }
+    if (password.length < 6) { setError("Password must be at least 6 characters."); return; }
+    setLoading(true); setError(""); setSuccess("");
+    try {
+      if (mode === "signup") {
+        const { data, error } = await supabase.auth.signUp({ email: email.trim(), password });
+        if (error) { setError(error.message); setLoading(false); return; }
+        if (data.user && !data.session) {
+          setSuccess("Check your email to confirm your account, then log in.");
+          setMode("login"); setLoading(false); return;
+        }
+        if (data.user) onAuth(data.user);
+      } else {
+        const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+        if (error) { setError(error.message); setLoading(false); return; }
+        if (data.user) onAuth(data.user);
+      }
+    } catch(e) { setError("Something went wrong. Please try again."); }
+    setLoading(false);
+  };
+
+  return (
+    <div style={{ minHeight:"100vh", background:"#080808", fontFamily:"Georgia,serif", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"40px 20px" }}>
+      <style>{`html,body{background:#080808!important;margin:0;padding:0}*{box-sizing:border-box}@keyframes sooSpin{to{transform:rotate(360deg)}}`}</style>
+      <div style={{ marginBottom:40, textAlign:"center" }}>
+        <div style={{ fontSize:36, color:"#FFD700", marginBottom:12 }}>★</div>
+        <div style={{ fontSize:22, color:"#fff" }}>Stay on One</div>
+        <div style={{ fontSize:14, color:"#555", marginTop:6 }}>Built for people who finish things.</div>
+      </div>
+      <div style={{ background:"rgba(255,255,255,0.03)", border:"1px solid rgba(255,255,255,0.09)", borderRadius:18, padding:"36px 40px", maxWidth:420, width:"100%", display:"flex", flexDirection:"column", gap:18 }}>
+        <div style={{ display:"flex", gap:0, background:"rgba(255,255,255,0.04)", borderRadius:10, padding:4 }}>
+          {["login","signup"].map(m => (
+            <button key={m} onClick={() => { setMode(m); setError(""); setSuccess(""); }}
+              style={{ flex:1, background:mode===m?"rgba(255,215,0,0.15)":"none", border:mode===m?"1px solid rgba(255,215,0,0.3)":"1px solid transparent", borderRadius:8, padding:"9px", fontSize:14, color:mode===m?"#FFD700":"#555", cursor:"pointer", fontFamily:"Georgia,serif", transition:"all 0.2s" }}>
+              {m === "login" ? "Log In" : "Sign Up"}
+            </button>
+          ))}
+        </div>
+        <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+          <div>
+            <label style={{ fontSize:11, color:"#666", letterSpacing:"0.1em", textTransform:"uppercase", display:"block", marginBottom:7 }}>Email</label>
+            <input type="email" value={email} onChange={e => setEmail(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && handleSubmit()}
+              placeholder="you@example.com"
+              style={{ width:"100%", background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:10, padding:"12px 15px", fontSize:15, color:"#fff", fontFamily:"Georgia,serif", outline:"none" }} />
+          </div>
+          <div>
+            <label style={{ fontSize:11, color:"#666", letterSpacing:"0.1em", textTransform:"uppercase", display:"block", marginBottom:7 }}>Password</label>
+            <input type="password" value={password} onChange={e => setPassword(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && handleSubmit()}
+              placeholder="6+ characters"
+              style={{ width:"100%", background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:10, padding:"12px 15px", fontSize:15, color:"#fff", fontFamily:"Georgia,serif", outline:"none" }} />
+          </div>
+        </div>
+        {error && <div style={{ fontSize:13, color:"#E87C7C", background:"rgba(232,124,124,0.1)", border:"1px solid rgba(232,124,124,0.2)", borderRadius:8, padding:"10px 14px" }}>{error}</div>}
+        {success && <div style={{ fontSize:13, color:"#7CE8A0", background:"rgba(124,232,160,0.1)", border:"1px solid rgba(124,232,160,0.2)", borderRadius:8, padding:"10px 14px" }}>{success}</div>}
+        <button onClick={handleSubmit} disabled={loading}
+          style={{ background:loading?"rgba(255,215,0,0.3)":"#FFD700", color:"#000", border:"none", borderRadius:10, padding:"14px", fontSize:16, fontFamily:"Georgia,serif", fontWeight:700, cursor:loading?"default":"pointer" }}>
+          {loading ? "Please wait..." : mode === "login" ? "Log In →" : "Create Account →"}
+        </button>
+        <div style={{ fontSize:12, color:"#444", textAlign:"center" }}>
+          {mode === "login" ? "No account? " : "Already have one? "}
+          <span onClick={() => { setMode(mode==="login"?"signup":"login"); setError(""); setSuccess(""); }} style={{ color:"#FFD700", cursor:"pointer" }}>
+            {mode === "login" ? "Sign up free" : "Log in"}
+          </span>
+        </div>
+      </div>
+      <div style={{ fontSize:12, color:"#333", marginTop:24 }}>Free · Private · Your data syncs across all devices</div>
+    </div>
+  );
+}
+
+// ─── ONBOARDING ───────────────────────────────────────────────────────────────
+function Onboarding({ userId, onComplete }) {
+  const [step, setStep] = useState(1);
+  const [name, setName] = useState("");
+  const [picked, setPicked] = useState([]);
+  const [vision, setVision] = useState("");
+  const [visionLoading, setVisionLoading] = useState(false);
+  const [goalInputs, setGoalInputs] = useState({});
+  const [goalIdx, setGoalIdx] = useState(0);
+  const [saving, setSaving] = useState(false);
+
+  const togglePick = (id) => {
+    if (picked.includes(id)) setPicked(picked.filter(p => p !== id));
+    else if (picked.length < 3) setPicked([...picked, id]);
+  };
+
+  const generateVision = async () => {
+    setVisionLoading(true);
+    const areas = picked.map(id => cat(id)?.name).join(", ");
+    const reply = await callClaude(
+      [{ role: "user", content: `Name: ${name}\nFocus areas: ${areas}\n\nWrite their Life Vision.` }],
+      `You are a master life architect. Create a profound, inspiring Life Vision for this person in second person ("You are..."). Based only on their name and 3 chosen focus areas. Make it feel personal, specific, and emotionally resonant. 3-4 short powerful paragraphs. No headers. Poetic but grounded. End with a single bold commitment sentence starting with "Your one commitment:"`
+    );
+    setVision(reply);
+    setVisionLoading(false);
+  };
+
+  const handleFinish = async () => {
+    setSaving(true);
+    const finalGoals = {};
+    const finalScores = {};
+    picked.forEach(id => {
+      finalGoals[id] = { goal: goalInputs[id]?.trim() || SUGGESTED_GOALS[id] || "", metrics: "" };
+      finalScores[id] = 50;
+    });
+    await db.save(userId, { user_name: name, goals: finalGoals, scores: finalScores, vision, logs: {}, chats: {} });
+    onComplete({ userName: name, goals: finalGoals, scores: finalScores, vision, logs: {}, chats: {} });
+  };
+
+  const currentCatId = picked[goalIdx];
+  const currentCat = cat(currentCatId);
+
+  const BG = { minHeight:"100vh", background:"#080808", fontFamily:"Georgia,serif", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"40px 20px" };
+  const STYLE = `html,body{background:#080808!important;margin:0;padding:0}*{box-sizing:border-box}@keyframes sooSpin{to{transform:rotate(360deg)}}@keyframes fadeIn{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}`;
+
+  // Step indicator
+  const Steps = () => (
+    <div style={{ display:"flex", gap:6, marginBottom:44, alignItems:"center" }}>
+      {[1,2,3,4,5].map(s => (
+        <div key={s} style={{ width:s===step?28:8, height:8, borderRadius:4, background:s===step?"#FFD700":s<step?"rgba(255,215,0,0.5)":"rgba(255,255,255,0.08)", transition:"all 0.3s ease" }} />
+      ))}
+    </div>
+  );
+
+  // ── STEP 1: Name ────────────────────────────────────────────────────────────
+  if (step === 1) return (
+    <div style={BG}>
+      <style>{STYLE}</style>
+      <Steps />
+      <div style={{ maxWidth:480, width:"100%", textAlign:"center", animation:"fadeIn 0.5s ease" }}>
+        <div style={{ fontSize:42, color:"#FFD700", marginBottom:16 }}>★</div>
+        <h1 style={{ fontSize:32, fontWeight:400, color:"#fff", margin:"0 0 12px", lineHeight:1.3 }}>Welcome to Stay on One.</h1>
+        <p style={{ fontSize:16, color:"#666", margin:"0 0 36px", lineHeight:1.7 }}>This is your personal accountability system. Built for people who want to stop starting over and start compounding.</p>
+        <div style={{ textAlign:"left", marginBottom:20 }}>
+          <label style={{ fontSize:11, color:"#666", letterSpacing:"0.1em", textTransform:"uppercase", display:"block", marginBottom:8 }}>What should I call you?</label>
+          <input autoFocus value={name} onChange={e => setName(e.target.value)} onKeyDown={e => e.key==="Enter" && name.trim() && setStep(2)}
+            placeholder="Your first name"
+            style={{ width:"100%", background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:12, padding:"14px 18px", fontSize:18, color:"#fff", fontFamily:"Georgia,serif", outline:"none" }} />
+        </div>
+        <button onClick={() => name.trim() && setStep(2)} disabled={!name.trim()}
+          style={{ width:"100%", background:name.trim()?"#FFD700":"rgba(255,215,0,0.15)", color:name.trim()?"#000":"#666", border:"none", borderRadius:12, padding:"15px", fontSize:16, fontFamily:"Georgia,serif", fontWeight:700, cursor:name.trim()?"pointer":"default" }}>
+          Let's begin →
+        </button>
+      </div>
+    </div>
+  );
+
+  // ── STEP 2: Pick 3 areas ─────────────────────────────────────────────────────
+  if (step === 2) return (
+    <div style={BG}>
+      <style>{STYLE}</style>
+      <Steps />
+      <div style={{ maxWidth:700, width:"100%", textAlign:"center", animation:"fadeIn 0.5s ease" }}>
+        <h2 style={{ fontSize:30, fontWeight:400, color:"#fff", margin:"0 0 10px" }}>Pick your 3 focus areas, {name}.</h2>
+        <p style={{ fontSize:15, color:"#666", margin:"0 0 32px", lineHeight:1.7 }}>Don't try to fix everything at once. Pick the 3 areas where growth would change everything else.</p>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10, marginBottom:28 }}>
+          {CATS.map(c => {
+            const sel = picked.includes(c.id);
+            const disabled = !sel && picked.length >= 3;
+            return (
+              <div key={c.id} onClick={() => !disabled && togglePick(c.id)}
+                style={{ background:sel?`rgba(${hexRgb(c.color)},0.15)`:"rgba(255,255,255,0.02)", border:`1px solid ${sel?c.color:"rgba(255,255,255,0.07)"}`, borderRadius:12, padding:"16px 10px", cursor:disabled?"default":"pointer", opacity:disabled?0.3:1, transition:"all 0.2s", textAlign:"center", position:"relative" }}>
+                {sel && <div style={{ position:"absolute", top:6, right:8, fontSize:11, color:c.color }}>✓</div>}
+                <div style={{ fontSize:24, color:c.color, marginBottom:8 }}>{c.icon}</div>
+                <div style={{ fontSize:12, color:sel?"#fff":"#aaa", lineHeight:1.4 }}>{c.name}</div>
+              </div>
+            );
+          })}
+        </div>
+        <div style={{ fontSize:13, color:"#555", marginBottom:20 }}>{picked.length}/3 selected</div>
+        <button onClick={() => picked.length > 0 && setStep(3)} disabled={picked.length === 0}
+          style={{ background:picked.length>0?"#FFD700":"rgba(255,215,0,0.15)", color:picked.length>0?"#000":"#666", border:"none", borderRadius:12, padding:"14px 36px", fontSize:16, fontFamily:"Georgia,serif", fontWeight:700, cursor:picked.length>0?"pointer":"default" }}>
+          {picked.length === 0 ? "Select at least 1" : `Continue with ${picked.length} area${picked.length>1?"s":""} →`}
+        </button>
+      </div>
+    </div>
+  );
+
+  // ── STEP 3: Life Vision generation ──────────────────────────────────────────
+  if (step === 3) return (
+    <div style={BG}>
+      <style>{STYLE}</style>
+      <Steps />
+      <div style={{ maxWidth:640, width:"100%", animation:"fadeIn 0.5s ease" }}>
+        <div style={{ textAlign:"center", marginBottom:32 }}>
+          <div style={{ fontSize:36, color:"#FFD700", marginBottom:12 }}>★</div>
+          <h2 style={{ fontSize:28, fontWeight:400, color:"#fff", margin:"0 0 10px" }}>Let's write your Life Vision.</h2>
+          <p style={{ fontSize:15, color:"#666", margin:0, lineHeight:1.7 }}>Before goals come clarity. Your vision is the reason behind everything you're about to track.</p>
+        </div>
+        {!vision && !visionLoading && (
+          <div style={{ textAlign:"center" }}>
+            <div style={{ display:"flex", gap:10, justifyContent:"center", marginBottom:28, flexWrap:"wrap" }}>
+              {picked.map(id => { const c = cat(id); return (
+                <div key={id} style={{ display:"flex", alignItems:"center", gap:7, background:`rgba(${hexRgb(c?.color||"#FFD700")},0.1)`, border:`1px solid ${c?.color}44`, borderRadius:20, padding:"7px 14px" }}>
+                  <span style={{ color:c?.color }}>{c?.icon}</span>
+                  <span style={{ fontSize:13, color:"#ccc" }}>{c?.name}</span>
+                </div>
+              ); })}
+            </div>
+            <button onClick={generateVision}
+              style={{ background:"#FFD700", color:"#000", border:"none", borderRadius:12, padding:"15px 36px", fontSize:16, fontFamily:"Georgia,serif", fontWeight:700, cursor:"pointer" }}>
+              Generate My Life Vision →
+            </button>
+          </div>
+        )}
+        {visionLoading && (
+          <div style={{ textAlign:"center", padding:"40px 0" }}>
+            <div style={{ width:34, height:34, border:"2px solid rgba(255,215,0,0.2)", borderTop:"2px solid #FFD700", borderRadius:"50%", animation:"sooSpin 1s linear infinite", margin:"0 auto 18px" }} />
+            <p style={{ color:"#888", fontSize:15 }}>Writing your vision...</p>
+          </div>
+        )}
+        {vision && !visionLoading && (
+          <div style={{ animation:"fadeIn 0.6s ease" }}>
+            <div style={{ background:"rgba(255,215,0,0.04)", border:"1px solid rgba(255,215,0,0.15)", borderRadius:16, padding:"30px 34px", marginBottom:24 }}>
+              {vision.split("\n").filter(l => l.trim()).map((line, i) => (
+                <p key={i} style={{ fontSize:16, lineHeight:1.85, color:"#ddd", margin:"0 0 14px", fontStyle: line.startsWith("Your one commitment") ? "italic" : "normal", color: line.startsWith("Your one commitment") ? "#FFD700" : "#ddd" }}>{line}</p>
+              ))}
+            </div>
+            <div style={{ display:"flex", gap:10 }}>
+              <button onClick={generateVision} style={{ background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:10, padding:"12px 20px", fontSize:14, color:"#888", cursor:"pointer", fontFamily:"Georgia,serif" }}>Regenerate</button>
+              <button onClick={() => setStep(4)} style={{ flex:1, background:"#FFD700", color:"#000", border:"none", borderRadius:10, padding:"13px", fontSize:16, fontFamily:"Georgia,serif", fontWeight:700, cursor:"pointer" }}>This is my vision. Set my goals →</button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  // ── STEP 4: Set goals ────────────────────────────────────────────────────────
+  if (step === 4) return (
+    <div style={BG}>
+      <style>{STYLE}</style>
+      <Steps />
+      <div style={{ maxWidth:540, width:"100%", animation:"fadeIn 0.5s ease" }}>
+        <div style={{ textAlign:"center", marginBottom:28 }}>
+          <div style={{ fontSize:13, color:"#555" }}>Goal {goalIdx+1} of {picked.length}</div>
+          <h2 style={{ fontSize:26, fontWeight:400, color:"#fff", margin:"8px 0 6px" }}>Now set your one goal.</h2>
+          <p style={{ fontSize:14, color:"#666", margin:0 }}>One goal per area. Specific. Achievable. Yours.</p>
+        </div>
+        {currentCat && (
+          <div style={{ background:`rgba(${hexRgb(currentCat.color)},0.06)`, border:`1px solid ${currentCat.color}44`, borderRadius:18, padding:"28px 30px", display:"flex", flexDirection:"column", gap:16 }}>
+            <div style={{ display:"flex", alignItems:"center", gap:14 }}>
+              <span style={{ fontSize:30, color:currentCat.color }}>{currentCat.icon}</span>
+              <div>
+                <div style={{ fontSize:19, color:currentCat.color }}>{currentCat.name}</div>
+                <div style={{ fontSize:13, color:"#555", marginTop:2 }}>What's your one goal here?</div>
+              </div>
+            </div>
+            <div style={{ fontSize:12, color:"#555", fontStyle:"italic", background:"rgba(255,255,255,0.03)", border:"1px solid rgba(255,255,255,0.06)", borderRadius:8, padding:"10px 14px" }}>
+              Suggested: {SUGGESTED_GOALS[currentCatId]}
+            </div>
+            <textarea rows={3} autoFocus
+              value={goalInputs[currentCatId] || ""}
+              onChange={e => setGoalInputs(g => ({ ...g, [currentCatId]: e.target.value }))}
+              placeholder={SUGGESTED_GOALS[currentCatId]}
+              style={{ background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:10, padding:"12px 15px", fontSize:15, color:"#fff", fontFamily:"Georgia,serif", outline:"none", resize:"vertical", width:"100%" }} />
+            <div style={{ display:"flex", gap:10 }}>
+              <button onClick={() => { setGoalInputs(g => ({ ...g, [currentCatId]: SUGGESTED_GOALS[currentCatId] })); goalIdx < picked.length-1 ? setGoalIdx(i=>i+1) : setStep(5); }}
+                style={{ flex:1, background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:9, padding:"12px", fontSize:13, color:"#aaa", cursor:"pointer", fontFamily:"Georgia,serif" }}>
+                Use suggestion
+              </button>
+              <button onClick={() => { if (!goalInputs[currentCatId]?.trim()) setGoalInputs(g => ({ ...g, [currentCatId]: SUGGESTED_GOALS[currentCatId] })); goalIdx < picked.length-1 ? setGoalIdx(i=>i+1) : setStep(5); }}
+                style={{ flex:2, background:"#FFD700", color:"#000", border:"none", borderRadius:9, padding:"12px", fontSize:15, fontFamily:"Georgia,serif", fontWeight:700, cursor:"pointer" }}>
+                {goalIdx < picked.length-1 ? "Next →" : "Done →"}
+              </button>
+            </div>
+          </div>
+        )}
+        {goalIdx > 0 && (
+          <button onClick={() => setGoalIdx(i=>i-1)} style={{ background:"none", border:"none", color:"#555", cursor:"pointer", fontSize:13, fontFamily:"Georgia,serif", marginTop:14, display:"block" }}>← Back</button>
+        )}
+      </div>
+    </div>
+  );
+
+  // ── STEP 5: Ready ────────────────────────────────────────────────────────────
+  if (step === 5) return (
+    <div style={BG}>
+      <style>{STYLE}</style>
+      <div style={{ maxWidth:520, width:"100%", textAlign:"center", animation:"fadeIn 0.5s ease" }}>
+        <div style={{ fontSize:52, marginBottom:18 }}>🎯</div>
+        <h2 style={{ fontSize:32, fontWeight:400, color:"#fff", margin:"0 0 14px", lineHeight:1.3 }}>You're ready, {name}.</h2>
+        <p style={{ fontSize:16, color:"#aaa", margin:"0 0 10px", lineHeight:1.7 }}>Your vision is set. Your goals are locked in. All that's left is Day 1.</p>
+        <p style={{ fontSize:14, color:"#666", margin:"0 0 36px", lineHeight:1.7, fontStyle:"italic" }}>"The first step is the hardest. You've already taken three."</p>
+        <div style={{ display:"flex", flexDirection:"column", gap:10, marginBottom:32 }}>
+          {picked.map(id => { const c = cat(id); return (
+            <div key={id} style={{ display:"flex", alignItems:"center", gap:12, background:`rgba(${hexRgb(c?.color||"#FFD700")},0.07)`, border:`1px solid ${c?.color}33`, borderRadius:12, padding:"13px 18px", textAlign:"left" }}>
+              <span style={{ fontSize:20, color:c?.color }}>{c?.icon}</span>
+              <div>
+                <div style={{ fontSize:13, color:c?.color }}>{c?.name}</div>
+                <div style={{ fontSize:12, color:"#777", marginTop:2 }}>{goalInputs[id] || SUGGESTED_GOALS[id]}</div>
+              </div>
+            </div>
+          ); })}
+        </div>
+        <button onClick={handleFinish} disabled={saving}
+          style={{ width:"100%", background:saving?"rgba(255,215,0,0.3)":"#FFD700", color:"#000", border:"none", borderRadius:12, padding:"16px", fontSize:17, fontFamily:"Georgia,serif", fontWeight:700, cursor:saving?"default":"pointer" }}>
+          {saving ? "Setting up your account..." : "Start Day 1 →"}
+        </button>
+      </div>
+    </div>
+  );
+
+  return null;
 }
 
 // ─── LANDING PAGE ────────────────────────────────────────────────────────────
@@ -633,113 +959,6 @@ function LandingPage({ onEnter }) {
 }
 
 
-// ─── ONBOARDING ───────────────────────────────────────────────────────────────
-function Onboarding({ userName, onComplete }) {
-  const [step, setStep] = useState(1);
-  const [picked, setPicked] = useState([]);
-  const [goalInputs, setGoalInputs] = useState({});
-  const [currentGoalIdx, setCurrentGoalIdx] = useState(0);
-
-  const togglePick = (id) => {
-    if (picked.includes(id)) setPicked(picked.filter(p => p !== id));
-    else if (picked.length < 3) setPicked([...picked, id]);
-  };
-
-  const handleGoalNext = () => {
-    if (currentGoalIdx < picked.length - 1) {
-      setCurrentGoalIdx(i => i + 1);
-    } else {
-      const finalGoals = {};
-      const finalScores = {};
-      picked.forEach(id => {
-        const val = goalInputs[id]?.trim() || SUGGESTED_GOALS[id] || "";
-        finalGoals[id] = { goal: val, metrics: "" };
-        finalScores[id] = 50;
-      });
-      onComplete(finalGoals, finalScores);
-    }
-  };
-
-  const currentCatId = picked[currentGoalIdx];
-  const currentCat = cat(currentCatId);
-
-  return (
-    <div style={{ minHeight:"100vh",background:"#080808",fontFamily:"Georgia,serif",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"40px 20px" }}>
-      <style>{`html,body{background:#080808!important;margin:0;padding:0}*{box-sizing:border-box}`}</style>
-      <div style={{ display:"flex",gap:8,marginBottom:48 }}>
-        {[1,2].map(s => (
-          <div key={s} style={{ width:s===step?28:8,height:8,borderRadius:4,background:s===step?"#FFD700":s<step?"rgba(255,215,0,0.4)":"rgba(255,255,255,0.1)",transition:"all 0.3s ease" }} />
-        ))}
-      </div>
-
-      {step === 1 && (
-        <div style={{ maxWidth:700,width:"100%",textAlign:"center" }}>
-          <div style={{ fontSize:11,color:"#FFD700",letterSpacing:"0.2em",textTransform:"uppercase",marginBottom:16,opacity:0.7 }}>Welcome, {userName}</div>
-          <h2 style={{ fontSize:34,fontWeight:400,color:"#fff",margin:"0 0 14px" }}>Pick your top 3 life areas to start.</h2>
-          <p style={{ fontSize:16,color:"#666",margin:"0 0 36px",lineHeight:1.7 }}>Don't try to fix everything at once. Pick the 3 areas that, if improved, would change everything else.</p>
-          <div style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:32 }}>
-            {CATS.map(c => {
-              const sel = picked.includes(c.id);
-              const disabled = !sel && picked.length >= 3;
-              return (
-                <div key={c.id} onClick={() => !disabled && togglePick(c.id)}
-                  style={{ background:sel?`rgba(${hexRgb(c.color)},0.15)`:"rgba(255,255,255,0.02)",border:`1px solid ${sel?c.color:"rgba(255,255,255,0.07)"}`,borderRadius:12,padding:"16px 10px",cursor:disabled?"default":"pointer",opacity:disabled?0.35:1,transition:"all 0.2s",textAlign:"center",position:"relative" }}>
-                  {sel && <div style={{ position:"absolute",top:6,right:8,fontSize:11,color:c.color }}>✓</div>}
-                  <div style={{ fontSize:22,color:c.color,marginBottom:8 }}>{c.icon}</div>
-                  <div style={{ fontSize:12,color:sel?"#fff":"#aaa" }}>{c.name}</div>
-                </div>
-              );
-            })}
-          </div>
-          <div style={{ fontSize:13,color:"#555",marginBottom:20 }}>{picked.length}/3 selected</div>
-          <button onClick={() => { if (picked.length > 0) setStep(2); }} disabled={picked.length === 0}
-            style={{ background:picked.length>0?"#FFD700":"rgba(255,215,0,0.15)",color:picked.length>0?"#000":"#666",border:"none",borderRadius:10,padding:"14px 36px",fontSize:16,fontFamily:"Georgia,serif",fontWeight:700,cursor:picked.length>0?"pointer":"default" }}>
-            {picked.length === 0 ? "Select at least 1" : `Continue with ${picked.length} area${picked.length>1?"s":""} \u2192`}
-          </button>
-          <p style={{ fontSize:12,color:"#444",marginTop:14 }}>You can add more goals later from the Goals page</p>
-        </div>
-      )}
-
-      {step === 2 && currentCat && (
-        <div style={{ maxWidth:540,width:"100%" }}>
-          <div style={{ fontSize:12,color:"#555",textAlign:"center",marginBottom:24 }}>Goal {currentGoalIdx+1} of {picked.length}</div>
-          <div style={{ background:`rgba(${hexRgb(currentCat.color)},0.06)`,border:`1px solid ${currentCat.color}44`,borderRadius:18,padding:"32px 34px",display:"flex",flexDirection:"column",gap:18 }}>
-            <div style={{ display:"flex",alignItems:"center",gap:14 }}>
-              <span style={{ fontSize:32,color:currentCat.color }}>{currentCat.icon}</span>
-              <div>
-                <div style={{ fontSize:20,color:currentCat.color }}>{currentCat.name}</div>
-                <div style={{ fontSize:13,color:"#555",marginTop:2 }}>Set your one goal for this area</div>
-              </div>
-            </div>
-            <div style={{ fontSize:12,color:"#555",fontStyle:"italic",background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.06)",borderRadius:8,padding:"10px 14px" }}>
-              Suggested: {SUGGESTED_GOALS[currentCatId]}
-            </div>
-            <textarea rows={3}
-              value={goalInputs[currentCatId] || ""}
-              onChange={e => setGoalInputs(g => ({ ...g, [currentCatId]: e.target.value }))}
-              placeholder={SUGGESTED_GOALS[currentCatId]}
-              autoFocus
-              style={{ background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"12px 15px",fontSize:15,color:"#fff",fontFamily:"Georgia,serif",outline:"none",resize:"vertical",width:"100%" }} />
-            <div style={{ display:"flex",gap:10 }}>
-              <button onClick={() => { setGoalInputs(g => ({ ...g, [currentCatId]: SUGGESTED_GOALS[currentCatId] })); handleGoalNext(); }}
-                style={{ flex:1,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:9,padding:"12px",fontSize:13,color:"#aaa",cursor:"pointer",fontFamily:"Georgia,serif" }}>
-                Use suggestion
-              </button>
-              <button onClick={() => { if (!goalInputs[currentCatId]?.trim()) setGoalInputs(g => ({ ...g, [currentCatId]: SUGGESTED_GOALS[currentCatId] })); handleGoalNext(); }}
-                style={{ flex:2,background:"#FFD700",color:"#000",border:"none",borderRadius:9,padding:"12px",fontSize:15,fontFamily:"Georgia,serif",fontWeight:700,cursor:"pointer" }}>
-                {currentGoalIdx < picked.length-1 ? "Next \u2192" : "Done \u2014 Let\u2019s go \u2192"}
-              </button>
-            </div>
-          </div>
-          {currentGoalIdx > 0 && (
-            <button onClick={() => setCurrentGoalIdx(i => i-1)} style={{ background:"none",border:"none",color:"#555",cursor:"pointer",fontSize:13,fontFamily:"Georgia,serif",marginTop:16,display:"block" }}>\u2190 Back</button>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ─── COACH ───────────────────────────────────────────────────────────────────
 function Coach({ userName, goals, scores, logs, lifeVision, currentPage }) {
   const [open, setOpen] = useState(false);
@@ -757,30 +976,16 @@ function Coach({ userName, goals, scores, logs, lifeVision, currentPage }) {
   useEffect(() => {
     if (!open || msgs.length > 0) return;
     const completedGoals = Object.keys(goals).filter(k => goals[k]?.goal?.trim());
-    let greeting = "";
-    if (completedGoals.length === 0) {
-      greeting = `Hey ${userName || "there"}, I'm Coach. Start by setting a goal in any life area and I'll help you think it through.`;
-    } else {
-      const allLogs = completedGoals.flatMap(id => (logs[parseInt(id)] || []).map(l => ({ ...l, catId: parseInt(id) })));
-      const recentLogs = allLogs.sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5);
-      const lastLogDays = recentLogs.length ? daysSince(recentLogs[0].date) : null;
-      const streaks = completedGoals.map(id => ({ id, streak: getStreak(logs[parseInt(id)] || []) }));
-      const bestStreak = streaks.sort((a, b) => b.streak - a.streak)[0];
-      const coldGoals = completedGoals.filter(id => { const ls = logs[parseInt(id)] || []; return ls.length === 0 || daysSince(ls[ls.length-1]?.date) > 3; });
-      if (lastLogDays === 0) {
-        const last = recentLogs[0];
-        const c = cat(last.catId);
-        greeting = `Hey ${userName} — you checked in on ${c?.name} today. ${last.delta >= 0 ? `+${last.delta} pts.` : `${last.delta} pts.`} ${coldGoals.length > 0 ? `${cat(parseInt(coldGoals[0]))?.name} hasn\'t been touched in a while though. Want to talk about it?` : "What else is on your mind?"}`;
-      } else if (bestStreak && bestStreak.streak >= 3) {
-        const c = cat(parseInt(bestStreak.id));
-        greeting = `Hey ${userName} — you\'re on a ${bestStreak.streak}-day streak on ${c?.name}. That\'s real momentum. ${coldGoals.length > 0 ? `But ${cat(parseInt(coldGoals[0]))?.name} needs attention.` : "How can I help today?"}`;
-      } else if (coldGoals.length > 0) {
-        const c = cat(parseInt(coldGoals[0]));
-        greeting = `Hey ${userName} — ${c?.name} hasn\'t had a check-in in a while. I\'m not judging, but I notice. What\'s been going on there?`;
-      } else {
-        greeting = `Hey ${userName}, I know all ${completedGoals.length} of your goals. What do you want to work through today?`;
-      }
-    }
+    const pageCtx = {
+      vision: "I see you've been working on your Life Vision — ask me anything about it.",
+      checkin: "You're doing your daily check-in — great habit.",
+      dailycheckin: "You're reviewing all your goals today — I'm here to help.",
+      progress: "You're reviewing your progress — I can help you interpret it.",
+      dashboard: "How can I help you stay focused today?",
+    }[currentPage] || "How can I help?";
+    const greeting = completedGoals.length === 0
+      ? `Hey ${userName || "there"}, I'm Coach. Start by setting a goal in any life area and I'll help you think it through.`
+      : `Hey ${userName || "there"}, I'm Coach — I know all ${completedGoals.length} of your goals. ${pageCtx}`;
     setMsgs([{ role: "assistant", content: greeting }]);
   }, [open]);
 
@@ -882,7 +1087,7 @@ function Coach({ userName, goals, scores, logs, lifeVision, currentPage }) {
 }
 
 // ─── NAV ─────────────────────────────────────────────────────────────────────
-function Nav({ tab, setTab, hasGoals, userName }) {
+function Nav({ tab, setTab, hasGoals, userName, onSignOut }) {
   const items = hasGoals
     ? [["dashboard","Dashboard"],["dailycheckin","Daily Check-in"],["progress","Progress"],["vision","Vision"],["setup","Goals"]]
     : [["setup","Goals"]];
@@ -903,9 +1108,10 @@ function Nav({ tab, setTab, hasGoals, userName }) {
 
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
 export default function App() {
-  const [loaded, setLoaded]         = useState(false);
-  const [screen, setScreen]         = useState("landing");
-  const [tab, setTab]               = useState("setup");
+  const [authUser, setAuthUser]     = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [screen, setScreen]         = useState("landing"); // landing | onboarding | app
+  const [tab, setTab]               = useState("dashboard");
   const [activeId, setActiveId]     = useState(null);
   const [userName, setUserName]     = useState("");
   const [goals, setGoals]           = useState({});
@@ -923,37 +1129,87 @@ export default function App() {
   const [dailyActive, setDailyActive] = useState(null);
   const chatEndRef = useRef(null);
 
+  // ── Auth listener ────────────────────────────────────────────────────────────
   useEffect(() => {
-    (async () => {
-      const d = await store.get("soo3");
-      if (d) {
-        setUserName(d.userName || ""); setGoals(d.goals || {}); setScores(d.scores || {});
-        setLogs(d.logs || {}); setChats(d.chats || {}); setVision(d.vision || "");
-        if (d.userName) { setScreen("app"); setTab(Object.keys(d.goals || {}).length ? "dashboard" : "setup"); }
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setAuthUser(session.user);
+        loadProfile(session.user.id);
+      } else {
+        setAuthLoading(false);
       }
-      setLoaded(true);
-    })();
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setAuthUser(session.user);
+        loadProfile(session.user.id);
+      } else {
+        setAuthUser(null);
+        setScreen("landing");
+        setAuthLoading(false);
+      }
+    });
+    return () => subscription.unsubscribe();
   }, []);
 
-  const save = (patch = {}) => store.set("soo3", { userName, goals, scores, logs, chats, vision, ...patch });
-  const handleEnter = (name) => { setUserName(name); setScreen("onboarding"); save({ userName: name }); };
-  const handleOnboardComplete = (newGoals, newScores) => {
-    setGoals(newGoals); setScores(newScores); setScreen("app"); setTab("dailycheckin");
-    setDailyActive(Object.keys(newGoals).map(Number)[0]);
-    save({ goals: newGoals, scores: newScores });
+  const loadProfile = async (userId) => {
+    const data = await db.load(userId);
+    if (data && data.user_name) {
+      setUserName(data.user_name || "");
+      setGoals(data.goals || {});
+      setScores(data.scores || {});
+      setLogs(data.logs || {});
+      setChats(data.chats || {});
+      setVision(data.vision || "");
+      setScreen("app");
+      setTab(Object.keys(data.goals || {}).length ? "dashboard" : "setup");
+    } else {
+      setScreen("onboarding");
+    }
+    setAuthLoading(false);
+  };
+
+  const save = async (patch = {}) => {
+    if (!authUser) return;
+    const merged = { user_name: userName, goals, scores, logs, chats, vision, ...patch };
+    await db.save(authUser.id, merged);
+  };
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+  };
+
+  const handleOnboardComplete = (profile) => {
+    setUserName(profile.userName);
+    setGoals(profile.goals);
+    setScores(profile.scores);
+    setVision(profile.vision);
+    setLogs(profile.logs || {});
+    setChats(profile.chats || {});
+    setScreen("app");
+    setTab("dailycheckin");
+    setDailyActive(Object.keys(profile.goals).map(Number)[0]);
   };
 
   const doneIds = Object.keys(goals).filter(k => goals[k]?.goal?.trim()).map(Number);
   const sc = (id) => scores[id] ?? 50;
   const todayLogged = (id) => (logs[id] || []).some(l => l.date === todayStr());
 
-  const saveGoal = () => {
+  const saveGoal = async () => {
     if (!editGoal.goal.trim()) return;
     const ng = { ...goals, [activeId]: { goal: editGoal.goal, metrics: editGoal.metrics } };
     const ns = { ...scores }; if (!ns[activeId]) ns[activeId] = 50;
-    setGoals(ng); setScores(ns); save({ goals: ng, scores: ns }); setTab("setup");
+    setGoals(ng); setScores(ns);
+    await save({ goals: ng, scores: ns });
+    setTab("setup");
   };
-  const removeGoal = () => { const ng = { ...goals }; delete ng[activeId]; setGoals(ng); save({ goals: ng }); setTab("setup"); };
+
+  const removeGoal = async () => {
+    const ng = { ...goals }; delete ng[activeId];
+    setGoals(ng);
+    await save({ goals: ng });
+    setTab("setup");
+  };
 
   const submitCheckin = async (id, note, mood) => {
     const targetId = id || activeId;
@@ -961,7 +1217,7 @@ export default function App() {
     const recent = (logs[targetId] || []).slice(-5).map(l => `${l.date}: ${l.note} (mood ${l.mood}/5)`).join("\n");
     const reply = await callClaude(
       [{ role: "user", content: `Goal: ${goals[targetId]?.goal}\nRecent history:\n${recent || "First check-in"}\n\nToday ${todayStr()}, mood ${mood}/5:\n${note}` }],
-      `You are an accountability coach. In 2-3 sentences: acknowledge what they did, assess if it moved them toward or away from their goal, give one sharp insight. Reference their history if relevant. End with exactly: DELTA:+8 or DELTA:-5 (range -20 to +20). Nothing after.`
+      `You are an accountability coach. In 2-3 sentences: acknowledge what they did, assess progress toward their goal, give one sharp insight. End with exactly: DELTA:+8 or DELTA:-5 (range -20 to +20). Nothing after.`
     );
     const match = reply.match(/DELTA:([+-]?\d+)/);
     const delta = match ? parseInt(match[1]) : 0;
@@ -975,7 +1231,7 @@ export default function App() {
     setLogs(nl); setScores(ns);
     setCiFeedback(prev => ({ ...prev, [targetId]: { text: clean, delta, newScore, oldScore } }));
     setCiLoading(false);
-    save({ logs: nl, scores: ns });
+    await save({ logs: nl, scores: ns });
   };
 
   const sendGoalChat = async () => {
@@ -988,28 +1244,39 @@ export default function App() {
     setChatInput(""); setChatLoading(true);
     const reply = await callClaude(updated.map(m => ({ role: m.role, content: m.content })), `You are a focused coach for ${userName}'s goal in ${c?.name}: "${goals[activeId]?.goal}". Score: ${sc(activeId)}/100. Be specific and direct.`);
     const nc = { ...chats, [activeId]: [...updated, { role: "assistant", content: reply }] };
-    setChats(nc); setChatLoading(false); save({ chats: nc });
+    setChats(nc); setChatLoading(false);
+    await save({ chats: nc });
     setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
   };
 
   const generateVision = async () => {
     setVisionLoading(true);
-    const goalsText = doneIds.map(id => `${cat(id)?.name} (score ${sc(id)}/100, ${(logs[id]||[]).length} check-ins): ${goals[id].goal}`).join("\n");
-    const reply = await callClaude([{ role: "user", content: `Name: ${userName}\nGoals:\n${goalsText}\n\nWrite their Life Vision.` }], `You are a master life architect. Create a profound personal Life Vision manifesto in second person. Inspired by Paul Graham: greatness compounds. Structure: opening identity, key themes, ONE core thread, 90-day challenge, closing commitment. Bold, specific, poetic.`);
-    setVision(reply); setVisionLoading(false); save({ vision: reply });
+    const goalsText = doneIds.map(id => `${cat(id)?.name} (score ${sc(id)}/100): ${goals[id].goal}`).join("\n");
+    const reply = await callClaude([{ role: "user", content: `Name: ${userName}\nGoals:\n${goalsText}\n\nWrite their updated Life Vision.` }], `You are a master life architect. Update this person's Life Vision manifesto. Second person, bold and specific, 3-4 paragraphs. End with "Your one commitment:" sentence.`);
+    setVision(reply);
+    setVisionLoading(false);
+    await save({ vision: reply });
   };
 
-  if (!loaded) return (
-    <div style={{ minHeight:"100vh",background:"#080808",display:"flex",alignItems:"center",justifyContent:"center" }}>
-      <div style={{ width:36,height:36,border:"2px solid rgba(255,215,0,0.2)",borderTop:"2px solid #FFD700",borderRadius:"50%",animation:"sooSpin 1s linear infinite" }} />
-      <style>{`@keyframes sooSpin{to{transform:rotate(360deg)}}`}</style>
+  // ── Loading ──────────────────────────────────────────────────────────────────
+  if (authLoading) return (
+    <div style={{ minHeight:"100vh", background:"#080808", display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column", gap:16 }}>
+      <div style={{ width:36, height:36, border:"2px solid rgba(255,215,0,0.2)", borderTop:"2px solid #FFD700", borderRadius:"50%", animation:"sooSpin 1s linear infinite" }} />
+      <div style={{ fontSize:14, color:"#555", fontFamily:"Georgia,serif" }}>Loading your account...</div>
+      <style>{`@keyframes sooSpin{to{transform:rotate(360deg)}}body{background:#080808;margin:0}`}</style>
     </div>
   );
 
-  if (screen === "landing") return <LandingPage onEnter={handleEnter} />;
-  if (screen === "onboarding") return <Onboarding userName={userName} onComplete={handleOnboardComplete} />;
+  // ── Auth gate ────────────────────────────────────────────────────────────────
+  if (!authUser) {
+    if (screen === "landing") return <LandingPage onEnter={() => setScreen("auth")} />;
+    return <AuthScreen onAuth={(user) => { setAuthUser(user); loadProfile(user.id); }} />;
+  }
 
-  // ── DAILY CHECK-IN ──────────────────────────────────────────────────────────
+  // ── Onboarding ───────────────────────────────────────────────────────────────
+  if (screen === "onboarding") return <Onboarding userId={authUser.id} onComplete={handleOnboardComplete} />;
+
+  // ── Daily Check-in tab ───────────────────────────────────────────────────────
   const DailyCheckin = () => {
     const [notes, setNotes] = useState({});
     const [moods, setMoods] = useState({});
@@ -1018,24 +1285,23 @@ export default function App() {
     const current = dailyActive || (pending.length > 0 ? pending[0] : null);
 
     if (doneIds.length === 0) return (
-      <div style={{ padding:"80px 26px",textAlign:"center" }}>
-        <div style={{ fontSize:40,marginBottom:16 }}>◎</div>
-        <h2 style={{ fontSize:22,fontWeight:400,color:"#fff",margin:"0 0 10px" }}>No goals set yet</h2>
-        <p style={{ color:"#666",fontSize:15,margin:"0 0 8px" }}>Set at least one goal to start your daily check-in.</p>
-        <p style={{ color:"#555",fontSize:13,margin:"0 0 24px" }}>Go to Goals in the nav, pick a life area, and write your one goal for it.</p>
-        <button onClick={() => setTab("setup")} style={{ background:"#FFD700",color:"#000",border:"none",borderRadius:9,padding:"12px 24px",fontSize:15,fontFamily:"Georgia,serif",fontWeight:700,cursor:"pointer" }}>Set Goals &rarr;</button>
+      <div style={{ padding:"80px 26px", textAlign:"center" }}>
+        <div style={{ fontSize:40, marginBottom:16 }}>◎</div>
+        <h2 style={{ fontSize:22, fontWeight:400, color:"#fff", margin:"0 0 10px" }}>No goals set yet</h2>
+        <p style={{ color:"#666", fontSize:15, margin:"0 0 24px" }}>Go to Goals and set your first goal to start checking in.</p>
+        <button onClick={() => setTab("setup")} style={{ background:"#FFD700", color:"#000", border:"none", borderRadius:9, padding:"12px 24px", fontSize:15, fontFamily:"Georgia,serif", fontWeight:700, cursor:"pointer" }}>Set Goals →</button>
       </div>
     );
 
     return (
-      <div style={{ padding:"34px 26px",maxWidth:1100,margin:"0 auto" }}>
+      <div style={{ padding:"34px 26px", maxWidth:1100, margin:"0 auto" }}>
         <div style={{ marginBottom:30 }}>
-          <h2 style={{ fontSize:26,fontWeight:400,color:"#fff",margin:"0 0 6px" }}>Daily Check-in &middot; {todayStr()}</h2>
-          <p style={{ color:"#666",fontSize:14,margin:0 }}>{pending.length} remaining &middot; {done.length} completed today</p>
+          <h2 style={{ fontSize:26, fontWeight:400, color:"#fff", margin:"0 0 6px" }}>Daily Check-in · {todayStr()}</h2>
+          <p style={{ color:"#666", fontSize:14, margin:0 }}>{pending.length} remaining · {done.length} completed today</p>
         </div>
-        <div style={{ display:"grid",gridTemplateColumns:"260px 1fr",gap:24 }}>
-          <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
-            <div style={{ fontSize:11,color:"#555",letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:6 }}>Your Goals</div>
+        <div style={{ display:"grid", gridTemplateColumns:"260px 1fr", gap:24 }}>
+          <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+            <div style={{ fontSize:11, color:"#555", letterSpacing:"0.1em", textTransform:"uppercase", marginBottom:6 }}>Your Goals</div>
             {doneIds.map(id => {
               const c = cat(id);
               const logged = todayLogged(id);
@@ -1043,26 +1309,26 @@ export default function App() {
               const streak = getStreak(logs[id] || []);
               return (
                 <div key={id} onClick={() => setDailyActive(id)}
-                  style={{ display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderRadius:10,cursor:"pointer",background:isActive?`rgba(${hexRgb(c?.color||"#FFD700")},0.1)`:"rgba(255,255,255,0.02)",border:`1px solid ${isActive?c?.color+"55":"rgba(255,255,255,0.06)"}`,transition:"all 0.15s" }}>
-                  <span style={{ color:c?.color,fontSize:16 }}>{c?.icon}</span>
-                  <div style={{ flex:1,minWidth:0 }}>
-                    <div style={{ fontSize:13,color:isActive?"#fff":"#aaa" }}>{c?.name}</div>
-                    <div style={{ fontSize:11,color:"#555",display:"flex",gap:6 }}>
+                  style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 14px", borderRadius:10, cursor:"pointer", background:isActive?`rgba(${hexRgb(c?.color||"#FFD700")},0.1)`:"rgba(255,255,255,0.02)", border:`1px solid ${isActive?c?.color+"55":"rgba(255,255,255,0.06)"}`, transition:"all 0.15s" }}>
+                  <span style={{ color:c?.color, fontSize:16 }}>{c?.icon}</span>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontSize:13, color:isActive?"#fff":"#aaa" }}>{c?.name}</div>
+                    <div style={{ fontSize:11, color:"#555", display:"flex", gap:6 }}>
                       <span>{sc(id)}/100</span>
-                      {streak > 0 && <span style={{ color:"#FF9500" }}>&#128293;{streak}</span>}
+                      {streak > 0 && <span style={{ color:"#FF9500" }}>🔥{streak}</span>}
                     </div>
                   </div>
                   {logged
-                    ? <span style={{ fontSize:14,color:"#7CE8A0" }}>&#10003;</span>
-                    : <span style={{ fontSize:10,color:"#E8D07C",background:"rgba(232,208,124,0.1)",border:"1px solid rgba(232,208,124,0.2)",borderRadius:10,padding:"2px 7px" }}>due</span>}
+                    ? <span style={{ fontSize:14, color:"#7CE8A0" }}>✓</span>
+                    : <span style={{ fontSize:10, color:"#E8D07C", background:"rgba(232,208,124,0.1)", border:"1px solid rgba(232,208,124,0.2)", borderRadius:10, padding:"2px 7px" }}>due</span>}
                 </div>
               );
             })}
-            {done.length === doneIds.length && (
-              <div style={{ marginTop:12,padding:"14px",background:"rgba(124,232,160,0.08)",border:"1px solid rgba(124,232,160,0.2)",borderRadius:10,textAlign:"center" }}>
-                <div style={{ fontSize:18,marginBottom:6 }}>&#127881;</div>
-                <div style={{ fontSize:13,color:"#7CE8A0" }}>All done for today!</div>
-                <div style={{ fontSize:11,color:"#555",marginTop:4 }}>Come back tomorrow</div>
+            {done.length === doneIds.length && doneIds.length > 0 && (
+              <div style={{ marginTop:12, padding:"14px", background:"rgba(124,232,160,0.08)", border:"1px solid rgba(124,232,160,0.2)", borderRadius:10, textAlign:"center" }}>
+                <div style={{ fontSize:18, marginBottom:6 }}>🎉</div>
+                <div style={{ fontSize:13, color:"#7CE8A0" }}>All done for today!</div>
+                <div style={{ fontSize:11, color:"#555", marginTop:4 }}>Come back tomorrow</div>
               </div>
             )}
           </div>
@@ -1076,86 +1342,76 @@ export default function App() {
             const allLogs = logs[current] || [];
             const yesterday = allLogs.filter(l => l.date !== todayStr()).slice(-1)[0];
             const streak = getStreak(allLogs);
-
             return (
-              <div style={{ display:"flex",flexDirection:"column",gap:16 }}>
-                <div style={{ display:"flex",alignItems:"center",gap:14,padding:"20px 24px",background:`rgba(${hexRgb(c?.color||"#FFD700")},0.06)`,border:`1px solid ${c?.color}33`,borderRadius:16 }}>
-                  <span style={{ fontSize:28,color:c?.color }}>{c?.icon}</span>
+              <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:14, padding:"20px 24px", background:`rgba(${hexRgb(c?.color||"#FFD700")},0.06)`, border:`1px solid ${c?.color}33`, borderRadius:16 }}>
+                  <span style={{ fontSize:28, color:c?.color }}>{c?.icon}</span>
                   <div style={{ flex:1 }}>
-                    <div style={{ fontSize:17,color:c?.color }}>{c?.name}</div>
-                    <div style={{ fontSize:13,color:"#777",marginTop:2 }}>{goals[current]?.goal}</div>
-                    {streak > 0 && <div style={{ fontSize:12,color:"#FF9500",marginTop:4 }}>&#128293; {streak}-day streak</div>}
+                    <div style={{ fontSize:17, color:c?.color }}>{c?.name}</div>
+                    <div style={{ fontSize:13, color:"#777", marginTop:2 }}>{goals[current]?.goal}</div>
+                    {streak > 0 && <div style={{ fontSize:12, color:"#FF9500", marginTop:4 }}>🔥 {streak}-day streak</div>}
                   </div>
                   <AnimatedRing pct={sc(current)} prevPct={prevScores[current]} color={c?.color||"#FFD700"} size={58} stroke={5} />
                 </div>
-
                 {yesterday && !logged && !feedback && (
-                  <div style={{ background:"rgba(255,255,255,0.02)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:12,padding:"14px 18px" }}>
-                    <div style={{ fontSize:11,color:"#555",letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:8 }}>Yesterday you said</div>
-                    <div style={{ fontSize:13,color:"#aaa",lineHeight:1.6,fontStyle:"italic" }}>"{yesterday.note.slice(0,120)}{yesterday.note.length>120?"...":""}"</div>
-                    {yesterday.aiReply && <div style={{ fontSize:12,color:"#666",marginTop:8,paddingTop:8,borderTop:"1px solid rgba(255,255,255,0.06)" }}>Coach said: "{yesterday.aiReply.slice(0,100)}..."</div>}
+                  <div style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(255,255,255,0.07)", borderRadius:12, padding:"14px 18px" }}>
+                    <div style={{ fontSize:11, color:"#555", letterSpacing:"0.1em", textTransform:"uppercase", marginBottom:8 }}>Yesterday you said</div>
+                    <div style={{ fontSize:13, color:"#aaa", lineHeight:1.6, fontStyle:"italic" }}>"{yesterday.note.slice(0,120)}{yesterday.note.length>120?"...":""}"</div>
+                    {yesterday.aiReply && <div style={{ fontSize:12, color:"#666", marginTop:8, paddingTop:8, borderTop:"1px solid rgba(255,255,255,0.06)" }}>Coach: "{yesterday.aiReply.slice(0,100)}..."</div>}
                   </div>
                 )}
-
                 {logged && !feedback ? (
-                  <div style={{ padding:"30px",textAlign:"center",background:"rgba(124,232,160,0.05)",border:"1px solid rgba(124,232,160,0.2)",borderRadius:14 }}>
-                    <div style={{ fontSize:28,marginBottom:10 }}>&#10003;</div>
-                    <div style={{ fontSize:15,color:"#7CE8A0" }}>Logged today</div>
-                    <div style={{ fontSize:13,color:"#555",marginTop:6 }}>{allLogs.slice(-1)[0]?.aiReply?.slice(0,120)}</div>
+                  <div style={{ padding:"30px", textAlign:"center", background:"rgba(124,232,160,0.05)", border:"1px solid rgba(124,232,160,0.2)", borderRadius:14 }}>
+                    <div style={{ fontSize:28, marginBottom:10 }}>✓</div>
+                    <div style={{ fontSize:15, color:"#7CE8A0" }}>Logged today</div>
+                    <div style={{ fontSize:13, color:"#555", marginTop:6 }}>{allLogs.slice(-1)[0]?.aiReply?.slice(0,120)}</div>
                   </div>
                 ) : feedback ? (
-                  <div style={{ background:`rgba(${hexRgb(c?.color||"#FFD700")},0.06)`,border:`1px solid ${c?.color}33`,borderRadius:14,padding:"22px 24px" }}>
-                    <div style={{ fontSize:11,color:c?.color,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:12 }}>Coach Feedback</div>
-                    <p style={{ fontSize:14,color:"#ddd",lineHeight:1.7,whiteSpace:"pre-wrap",margin:"0 0 16px" }}>{feedback.text}</p>
-                    <div style={{ display:"flex",alignItems:"center",gap:12,marginBottom:14 }}>
-                      <span style={{ fontSize:13,color:feedback.delta>=0?"#7CE8A0":"#E87C7C",fontWeight:700 }}>{feedback.delta>=0?"+":""}{feedback.delta} pts</span>
-                      <span style={{ fontSize:13,color:"#555" }}>&rarr;</span>
+                  <div style={{ background:`rgba(${hexRgb(c?.color||"#FFD700")},0.06)`, border:`1px solid ${c?.color}33`, borderRadius:14, padding:"22px 24px" }}>
+                    <div style={{ fontSize:11, color:c?.color, letterSpacing:"0.1em", textTransform:"uppercase", marginBottom:12 }}>Coach Feedback</div>
+                    <p style={{ fontSize:14, color:"#ddd", lineHeight:1.7, whiteSpace:"pre-wrap", margin:"0 0 16px" }}>{feedback.text}</p>
+                    <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:14 }}>
+                      <span style={{ fontSize:13, color:feedback.delta>=0?"#7CE8A0":"#E87C7C", fontWeight:700 }}>{feedback.delta>=0?"+":""}{feedback.delta} pts</span>
+                      <span style={{ fontSize:13, color:"#555" }}>→</span>
                       <AnimatedRing pct={feedback.newScore} prevPct={feedback.oldScore} color={c?.color||"#FFD700"} size={46} stroke={4} />
                     </div>
                     <Bar val={feedback.newScore} color={c?.color||"#FFD700"} />
                     {pending.filter(id => id !== current).length > 0 && (
                       <button onClick={() => { setDailyActive(pending.filter(id=>id!==current)[0]); setCiFeedback(p=>({...p,[current]:undefined})); setNotes(n=>({...n,[current]:""})); setMoods(m=>({...m,[current]:3})); }}
-                        style={{ marginTop:16,background:"#FFD700",color:"#000",border:"none",borderRadius:8,padding:"10px 20px",fontSize:13,fontFamily:"Georgia,serif",fontWeight:700,cursor:"pointer" }}>
-                        Next Goal &rarr;
+                        style={{ marginTop:16, background:"#FFD700", color:"#000", border:"none", borderRadius:8, padding:"10px 20px", fontSize:13, fontFamily:"Georgia,serif", fontWeight:700, cursor:"pointer" }}>
+                        Next Goal →
                       </button>
                     )}
                   </div>
                 ) : (
                   <>
                     <div>
-                      <div style={{ fontSize:11,color:"#666",letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:10 }}>How are you feeling about this goal today?</div>
-                      <div style={{ display:"flex",gap:8 }}>
-                        {["\uD83D\uDE14","\uD83D\uDE10","\uD83D\uDE42","\uD83D\uDE0A","\uD83D\uDD25"].map((emoji, i) => (
+                      <div style={{ fontSize:11, color:"#666", letterSpacing:"0.1em", textTransform:"uppercase", marginBottom:10 }}>How are you feeling about this goal today?</div>
+                      <div style={{ display:"flex", gap:8 }}>
+                        {["😔","😐","🙂","😊","🔥"].map((emoji, i) => (
                           <button key={i} onClick={() => setMoods(m => ({ ...m, [current]: i+1 }))}
-                            style={{ flex:1,border:`1px solid ${mood===i+1?(c?.color||"#FFD700"):"rgba(255,255,255,0.1)"}`,background:mood===i+1?`rgba(${hexRgb(c?.color||"#FFD700")},0.15)`:"rgba(255,255,255,0.04)",borderRadius:8,padding:"10px 0",fontSize:20,cursor:"pointer" }}>
+                            style={{ flex:1, border:`1px solid ${mood===i+1?(c?.color||"#FFD700"):"rgba(255,255,255,0.1)"}`, background:mood===i+1?`rgba(${hexRgb(c?.color||"#FFD700")},0.15)`:"rgba(255,255,255,0.04)", borderRadius:8, padding:"10px 0", fontSize:20, cursor:"pointer" }}>
                             {emoji}
                           </button>
                         ))}
                       </div>
                     </div>
                     <div>
-                      <div style={{ fontSize:11,color:"#666",letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:10 }}>What happened toward this goal today?</div>
+                      <div style={{ fontSize:11, color:"#666", letterSpacing:"0.1em", textTransform:"uppercase", marginBottom:10 }}>What happened toward this goal today?</div>
                       <textarea rows={4} value={note} onChange={e => setNotes(n => ({ ...n, [current]: e.target.value }))}
                         placeholder="Be specific. What did you do, skip, or decide? The more honest, the better the feedback."
-                        style={{ width:"100%",background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"13px 16px",fontSize:14,color:"#fff",fontFamily:"Georgia,serif",outline:"none",resize:"vertical" }} />
+                        style={{ width:"100%", background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:10, padding:"13px 16px", fontSize:14, color:"#fff", fontFamily:"Georgia,serif", outline:"none", resize:"vertical" }} />
                     </div>
                     <button onClick={() => submitCheckin(current, note, mood)} disabled={!note.trim() || ciLoading}
-                      style={{ background:note.trim()?"#FFD700":"rgba(255,215,0,0.15)",color:note.trim()?"#000":"#666",border:"none",borderRadius:10,padding:"14px",fontSize:15,fontFamily:"Georgia,serif",fontWeight:700,cursor:note.trim()?"pointer":"default" }}>
+                      style={{ background:note.trim()?"#FFD700":"rgba(255,215,0,0.15)", color:note.trim()?"#000":"#666", border:"none", borderRadius:10, padding:"14px", fontSize:15, fontFamily:"Georgia,serif", fontWeight:700, cursor:note.trim()?"pointer":"default" }}>
                       {ciLoading ? "Analyzing..." : "Log & Get AI Feedback"}
                     </button>
                   </>
                 )}
-                <div style={{ padding:"16px 20px",background:"rgba(255,215,0,0.04)",border:"1px solid rgba(255,215,0,0.12)",borderRadius:12,display:"flex",alignItems:"center",gap:14 }}>
-                  <div style={{ width:28,height:28,borderRadius:"50%",background:"linear-gradient(135deg,#FFD700,#FF9500)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,color:"#000",flexShrink:0 }}>C</div>
-                  <div style={{ flex:1 }}>
-                    <div style={{ fontSize:14,color:"#ddd" }}>Want to go deeper?</div>
-                    <div style={{ fontSize:12,color:"#666" }}>Open Coach (bottom-right) to analyse your {c?.name} journey, patterns, and next steps.</div>
-                  </div>
-                </div>
               </div>
             );
           })() : (
-            <div style={{ textAlign:"center",padding:"60px 20px",color:"#666" }}>
+            <div style={{ textAlign:"center", padding:"60px 20px", color:"#666" }}>
               <div style={{ fontSize:14 }}>Select a goal from the left to check in</div>
             </div>
           )}
@@ -1165,35 +1421,34 @@ export default function App() {
   };
 
   const renderScreen = () => {
-
     if (tab === "goalEntry") {
       const c = cat(activeId);
       return (
-        <div style={{ display:"flex",justifyContent:"center",padding:"36px 20px" }}>
-          <div style={{ background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.09)",borderRadius:18,padding:34,maxWidth:540,width:"100%",display:"flex",flexDirection:"column",gap:16 }}>
-            <button onClick={() => setTab("setup")} style={{ background:"none",border:"none",color:"#666",cursor:"pointer",fontSize:14,fontFamily:"Georgia,serif",padding:0,textAlign:"left" }}>&larr; Back</button>
-            <div style={{ fontSize:32,color:c?.color }}>{c?.icon}</div>
-            <h2 style={{ fontSize:24,fontWeight:400,color:c?.color,margin:0 }}>{c?.name}</h2>
+        <div style={{ display:"flex", justifyContent:"center", padding:"36px 20px" }}>
+          <div style={{ background:"rgba(255,255,255,0.03)", border:"1px solid rgba(255,255,255,0.09)", borderRadius:18, padding:34, maxWidth:540, width:"100%", display:"flex", flexDirection:"column", gap:16 }}>
+            <button onClick={() => setTab("setup")} style={{ background:"none", border:"none", color:"#666", cursor:"pointer", fontSize:14, fontFamily:"Georgia,serif", padding:0, textAlign:"left" }}>← Back</button>
+            <div style={{ fontSize:32, color:c?.color }}>{c?.icon}</div>
+            <h2 style={{ fontSize:24, fontWeight:400, color:c?.color, margin:0 }}>{c?.name}</h2>
             {!goals[activeId] && SUGGESTED_GOALS[activeId] && (
-              <div style={{ background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:8,padding:"10px 14px",fontSize:13,color:"#666",fontStyle:"italic" }}>
+              <div style={{ background:"rgba(255,255,255,0.03)", border:"1px solid rgba(255,255,255,0.08)", borderRadius:8, padding:"10px 14px", fontSize:13, color:"#666", fontStyle:"italic" }}>
                 Suggested: {SUGGESTED_GOALS[activeId]}
-                <button onClick={() => setEditGoal(g => ({ ...g, goal: SUGGESTED_GOALS[activeId] }))} style={{ display:"block",marginTop:6,background:"none",border:"none",color:"#FFD700",cursor:"pointer",fontSize:12,fontFamily:"Georgia,serif",padding:0 }}>Use this &rarr;</button>
+                <button onClick={() => setEditGoal(g => ({ ...g, goal: SUGGESTED_GOALS[activeId] }))} style={{ display:"block", marginTop:6, background:"none", border:"none", color:"#FFD700", cursor:"pointer", fontSize:12, fontFamily:"Georgia,serif", padding:0 }}>Use this →</button>
               </div>
             )}
-            <label style={{ fontSize:11,color:"#666",letterSpacing:"0.1em",textTransform:"uppercase" }}>Your ONE long-term goal</label>
+            <label style={{ fontSize:11, color:"#666", letterSpacing:"0.1em", textTransform:"uppercase" }}>Your ONE long-term goal</label>
             <textarea rows={3} placeholder="Be specific. Vague goals create vague lives."
               value={editGoal.goal} onChange={e => setEditGoal(g => ({ ...g, goal: e.target.value }))} autoFocus
-              style={{ background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"12px 15px",fontSize:15,color:"#fff",fontFamily:"Georgia,serif",outline:"none",resize:"vertical",width:"100%" }} />
-            <label style={{ fontSize:11,color:"#666",letterSpacing:"0.1em",textTransform:"uppercase" }}>How will you measure it? (optional)</label>
+              style={{ background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:10, padding:"12px 15px", fontSize:15, color:"#fff", fontFamily:"Georgia,serif", outline:"none", resize:"vertical", width:"100%" }} />
+            <label style={{ fontSize:11, color:"#666", letterSpacing:"0.1em", textTransform:"uppercase" }}>How will you measure it? (optional)</label>
             <input placeholder="e.g. workout 5x/week, body fat %, revenue..."
               value={editGoal.metrics} onChange={e => setEditGoal(g => ({ ...g, metrics: e.target.value }))}
-              style={{ background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"12px 15px",fontSize:15,color:"#fff",fontFamily:"Georgia,serif",outline:"none" }} />
-            <div style={{ display:"flex",gap:10 }}>
+              style={{ background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:10, padding:"12px 15px", fontSize:15, color:"#fff", fontFamily:"Georgia,serif", outline:"none" }} />
+            <div style={{ display:"flex", gap:10 }}>
               <button onClick={saveGoal} disabled={!editGoal.goal.trim()}
-                style={{ flex:1,background:editGoal.goal.trim()?"#FFD700":"rgba(255,215,0,0.15)",color:editGoal.goal.trim()?"#000":"#666",border:"none",borderRadius:9,padding:"12px",fontSize:15,fontFamily:"Georgia,serif",fontWeight:700,cursor:editGoal.goal.trim()?"pointer":"default" }}>
+                style={{ flex:1, background:editGoal.goal.trim()?"#FFD700":"rgba(255,215,0,0.15)", color:editGoal.goal.trim()?"#000":"#666", border:"none", borderRadius:9, padding:"12px", fontSize:15, fontFamily:"Georgia,serif", fontWeight:700, cursor:editGoal.goal.trim()?"pointer":"default" }}>
                 Save Goal
               </button>
-              {goals[activeId] && <button onClick={removeGoal} style={{ background:"none",border:"1px solid rgba(232,124,124,0.3)",borderRadius:9,padding:"12px 16px",fontSize:13,color:"#E87C7C",cursor:"pointer",fontFamily:"Georgia,serif" }}>Remove</button>}
+              {goals[activeId] && <button onClick={removeGoal} style={{ background:"none", border:"1px solid rgba(232,124,124,0.3)", borderRadius:9, padding:"12px 16px", fontSize:13, color:"#E87C7C", cursor:"pointer", fontFamily:"Georgia,serif" }}>Remove</button>}
             </div>
           </div>
         </div>
@@ -1201,33 +1456,33 @@ export default function App() {
     }
 
     if (tab === "setup") return (
-      <div style={{ padding:"34px 26px",maxWidth:1000,margin:"0 auto" }}>
-        <h2 style={{ fontSize:26,fontWeight:400,color:"#fff",margin:"0 0 8px" }}>Your Life Goals</h2>
-        <p style={{ color:"#666",fontSize:15,margin:"0 0 26px" }}>One goal per life area. Click any area to set or edit your goal.</p>
-        <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(190px,1fr))",gap:10 }}>
+      <div style={{ padding:"34px 26px", maxWidth:1000, margin:"0 auto" }}>
+        <h2 style={{ fontSize:26, fontWeight:400, color:"#fff", margin:"0 0 8px" }}>Your Life Goals</h2>
+        <p style={{ color:"#666", fontSize:15, margin:"0 0 26px" }}>One goal per life area. Click any area to set or edit.</p>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(190px,1fr))", gap:10 }}>
           {CATS.map(c => {
             const has = !!goals[c.id]?.goal;
             const s = sc(c.id);
             const streak = has ? getStreak(logs[c.id] || []) : 0;
             return (
               <div key={c.id} onClick={() => { setActiveId(c.id); setEditGoal({ goal: goals[c.id]?.goal || "", metrics: goals[c.id]?.metrics || "" }); setTab("goalEntry"); }}
-                style={{ background:"rgba(255,255,255,0.03)",border:`1px solid ${has?c.color+"55":"rgba(255,255,255,0.07)"}`,borderRadius:12,padding:16,cursor:"pointer",display:"flex",flexDirection:"column",gap:6 }}>
-                <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center" }}>
-                  <span style={{ color:c.color,fontSize:20 }}>{c.icon}</span>
-                  <div style={{ display:"flex",gap:6,alignItems:"center" }}>
-                    {streak > 0 && <span style={{ fontSize:11,color:"#FF9500" }}>&#128293;{streak}</span>}
-                    {has && <span style={{ fontSize:12,color:c.color,fontWeight:700 }}>{s}</span>}
+                style={{ background:"rgba(255,255,255,0.03)", border:`1px solid ${has?c.color+"55":"rgba(255,255,255,0.07)"}`, borderRadius:12, padding:16, cursor:"pointer", display:"flex", flexDirection:"column", gap:6 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                  <span style={{ color:c.color, fontSize:20 }}>{c.icon}</span>
+                  <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+                    {streak > 0 && <span style={{ fontSize:11, color:"#FF9500" }}>🔥{streak}</span>}
+                    {has && <span style={{ fontSize:12, color:c.color, fontWeight:700 }}>{s}</span>}
                   </div>
                 </div>
-                <div style={{ fontSize:14,color:"#ddd" }}>{c.name}</div>
-                <div style={{ fontSize:12,color:has?"#888":"#555",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{has?goals[c.id].goal:"+ Set goal"}</div>
+                <div style={{ fontSize:14, color:"#ddd" }}>{c.name}</div>
+                <div style={{ fontSize:12, color:has?"#888":"#555", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{has?goals[c.id].goal:"+ Set goal"}</div>
                 {has && <Bar val={s} color={c.color} />}
               </div>
             );
           })}
         </div>
         {doneIds.length > 0 && (
-          <button onClick={() => setTab("dashboard")} style={{ marginTop:24,background:"#FFD700",color:"#000",border:"none",borderRadius:9,padding:"12px 28px",fontSize:15,fontFamily:"Georgia,serif",fontWeight:700,cursor:"pointer" }}>Go to Dashboard &rarr;</button>
+          <button onClick={() => setTab("dashboard")} style={{ marginTop:24, background:"#FFD700", color:"#000", border:"none", borderRadius:9, padding:"12px 28px", fontSize:15, fontFamily:"Georgia,serif", fontWeight:700, cursor:"pointer" }}>Go to Dashboard →</button>
         )}
       </div>
     );
@@ -1242,51 +1497,36 @@ export default function App() {
       const allRecentLogs = doneIds.flatMap(id => (logs[id] || []).map(l => ({ ...l, catId: id }))).sort((a, b) => b.date.localeCompare(a.date));
       const lastLogDate = allRecentLogs[0]?.date;
       const daysSinceLast = lastLogDate ? daysSince(lastLogDate) : null;
-
       let greetingMsg = "";
-      if (totalLogs === 0) {
-        greetingMsg = "You've set your goals. Now start your first check-in — two minutes, that's all it takes.";
-      } else if (daysSinceLast === 0) {
-        const last = allRecentLogs[0];
-        const c = cat(last.catId);
-        greetingMsg = `You checked in on ${c?.name} today. ${last.delta >= 0 ? `+${last.delta} pts.` : `${last.delta} pts.`} Keep going.`;
-      } else if (daysSinceLast === 1) {
-        greetingMsg = `Yesterday was your last check-in. ${needCheckin.length} goal${needCheckin.length !== 1 ? "s" : ""} waiting for today.`;
-      } else if (daysSinceLast && daysSinceLast > 1) {
-        greetingMsg = `You haven't checked in for ${daysSinceLast} days. That's okay. The streak starts again today.`;
-      } else {
-        greetingMsg = `${needCheckin.length} goal${needCheckin.length !== 1 ? "s" : ""} waiting for today's check-in.`;
-      }
-
+      if (totalLogs === 0) greetingMsg = "You've set your goals. Now start your first check-in.";
+      else if (daysSinceLast === 0) { const last = allRecentLogs[0]; const c = cat(last.catId); greetingMsg = `You checked in on ${c?.name} today. ${last.delta >= 0 ? `+${last.delta}` : last.delta} pts. Keep going.`; }
+      else if (daysSinceLast === 1) greetingMsg = `Yesterday was your last check-in. ${needCheckin.length} goal${needCheckin.length !== 1 ? "s" : ""} waiting for today.`;
+      else if (daysSinceLast > 1) greetingMsg = `You haven't checked in for ${daysSinceLast} days. That's okay. The streak starts again today.`;
+      else greetingMsg = `${needCheckin.length} goal${needCheckin.length !== 1 ? "s" : ""} waiting for today's check-in.`;
       return (
-        <div style={{ padding:"34px 26px",maxWidth:1100,margin:"0 auto" }}>
-          <div style={{ background:"linear-gradient(135deg,rgba(255,215,0,0.06),rgba(255,150,0,0.03))",border:"1px solid rgba(255,215,0,0.15)",borderRadius:16,padding:"22px 26px",marginBottom:22 }}>
-            <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:16 }}>
+        <div style={{ padding:"34px 26px", maxWidth:1100, margin:"0 auto" }}>
+          <div style={{ background:"linear-gradient(135deg,rgba(255,215,0,0.06),rgba(255,150,0,0.03))", border:"1px solid rgba(255,215,0,0.15)", borderRadius:16, padding:"22px 26px", marginBottom:22 }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", flexWrap:"wrap", gap:16 }}>
               <div>
-                <h2 style={{ fontSize:26,fontWeight:400,color:"#fff",margin:"0 0 8px" }}>Good {timeOfDay()}, {userName}.</h2>
-                <p style={{ color:"#aaa",fontSize:15,margin:0,lineHeight:1.6 }}>{greetingMsg}</p>
-                <p style={{ color:"#555",fontSize:13,margin:"6px 0 0",fontStyle:"italic" }}>"{PGQ[new Date().getDay() % PGQ.length]}"</p>
+                <h2 style={{ fontSize:26, fontWeight:400, color:"#fff", margin:"0 0 8px" }}>Good {timeOfDay()}, {userName}.</h2>
+                <p style={{ color:"#aaa", fontSize:15, margin:0, lineHeight:1.6 }}>{greetingMsg}</p>
+                <p style={{ color:"#555", fontSize:13, margin:"6px 0 0", fontStyle:"italic" }}>"{PGQ[new Date().getDay() % PGQ.length]}"</p>
               </div>
-              <div style={{ display:"flex",gap:20,flexShrink:0 }}>
-                <div style={{ textAlign:"center" }}><div style={{ fontSize:30,color:"#FFD700",lineHeight:1 }}>{avg}</div><div style={{ fontSize:11,color:"#555",marginTop:3 }}>overall</div></div>
-                <div style={{ textAlign:"center" }}><div style={{ fontSize:30,color:"#FF9500",lineHeight:1 }}>{bestStreak > 0 ? `&#128293;${bestStreak}` : "&#8212;"}</div><div style={{ fontSize:11,color:"#555",marginTop:3 }}>best streak</div></div>
-                <div style={{ textAlign:"center" }}><div style={{ fontSize:30,color:"#7CB9E8",lineHeight:1 }}>{totalLogs}</div><div style={{ fontSize:11,color:"#555",marginTop:3 }}>check-ins</div></div>
+              <div style={{ display:"flex", gap:20, flexShrink:0 }}>
+                <div style={{ textAlign:"center" }}><div style={{ fontSize:30, color:"#FFD700", lineHeight:1 }}>{avg}</div><div style={{ fontSize:11, color:"#555", marginTop:3 }}>overall</div></div>
+                <div style={{ textAlign:"center" }}><div style={{ fontSize:30, color:"#FF9500", lineHeight:1 }}>{bestStreak > 0 ? `🔥${bestStreak}` : "—"}</div><div style={{ fontSize:11, color:"#555", marginTop:3 }}>streak</div></div>
+                <div style={{ textAlign:"center" }}><div style={{ fontSize:30, color:"#7CB9E8", lineHeight:1 }}>{totalLogs}</div><div style={{ fontSize:11, color:"#555", marginTop:3 }}>check-ins</div></div>
               </div>
             </div>
           </div>
-
           {needCheckin.length > 0 && (
-            <div style={{ display:"flex",alignItems:"center",gap:12,background:"rgba(255,215,0,0.07)",border:"1px solid rgba(255,215,0,0.2)",borderRadius:10,padding:"12px 16px",marginBottom:22 }}>
-              <span style={{ color:"#FFD700" }}>&#9733;</span>
-              <span style={{ fontSize:14,color:"#ddd" }}>{needCheckin.length} goal{needCheckin.length > 1 ? "s" : ""} awaiting today's check-in</span>
-              <button onClick={() => { setDailyActive(needCheckin[0]); setTab("dailycheckin"); }}
-                style={{ marginLeft:"auto",background:"rgba(255,215,0,0.15)",border:"1px solid rgba(255,215,0,0.3)",borderRadius:7,padding:"6px 14px",fontSize:13,color:"#FFD700",cursor:"pointer",fontFamily:"Georgia,serif" }}>
-                Start Daily Check-in
-              </button>
+            <div style={{ display:"flex", alignItems:"center", gap:12, background:"rgba(255,215,0,0.07)", border:"1px solid rgba(255,215,0,0.2)", borderRadius:10, padding:"12px 16px", marginBottom:22 }}>
+              <span style={{ color:"#FFD700" }}>★</span>
+              <span style={{ fontSize:14, color:"#ddd" }}>{needCheckin.length} goal{needCheckin.length > 1 ? "s" : ""} awaiting today's check-in</span>
+              <button onClick={() => { setDailyActive(needCheckin[0]); setTab("dailycheckin"); }} style={{ marginLeft:"auto", background:"rgba(255,215,0,0.15)", border:"1px solid rgba(255,215,0,0.3)", borderRadius:7, padding:"6px 14px", fontSize:13, color:"#FFD700", cursor:"pointer", fontFamily:"Georgia,serif" }}>Start Check-in</button>
             </div>
           )}
-
-          <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(285px,1fr))",gap:15 }}>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(285px,1fr))", gap:15 }}>
             {doneIds.map(id => {
               const c = cat(id);
               const s = sc(id);
@@ -1294,67 +1534,66 @@ export default function App() {
               const logged = todayLogged(id);
               const last7 = logList.slice(-7);
               const streak = getStreak(logList);
-              const trend = last7.length ? (last7[last7.length-1].delta > 0 ? "&#8593;" : last7[last7.length-1].delta < 0 ? "&#8595;" : "&#8212;") : "&#8212;";
               return (
-                <div key={id} style={{ background:"rgba(255,255,255,0.03)",border:`1px solid ${c?.color}33`,borderRadius:16,padding:20,display:"flex",flexDirection:"column",gap:8 }}>
-                  <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center" }}>
-                    <div style={{ display:"flex",alignItems:"center",gap:10 }}>
-                      <span style={{ color:c?.color,fontSize:20 }}>{c?.icon}</span>
+                <div key={id} style={{ background:"rgba(255,255,255,0.03)", border:`1px solid ${c?.color}33`, borderRadius:16, padding:20, display:"flex", flexDirection:"column", gap:8 }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                      <span style={{ color:c?.color, fontSize:20 }}>{c?.icon}</span>
                       <div>
-                        <div style={{ fontSize:13,color:c?.color }}>{c?.name}</div>
-                        <div style={{ fontSize:11,color:"#555",display:"flex",gap:6 }}>
-                          <span>{logList.length} check-ins</span>
-                          {streak > 0 && <span style={{ color:streak>=7?"#FF6500":"#FF9500" }}>&#128293; {streak}d</span>}
+                        <div style={{ fontSize:13, color:c?.color }}>{c?.name}</div>
+                        <div style={{ fontSize:11, color:"#555", display:"flex", gap:6 }}>
+                          <span>{logList.length} logs</span>
+                          {streak > 0 && <span style={{ color:streak>=7?"#FF6500":"#FF9500" }}>🔥{streak}d</span>}
                         </div>
                       </div>
                     </div>
                     <AnimatedRing pct={s} prevPct={prevScores[id]} color={c?.color||"#FFD700"} size={50} stroke={4} />
                   </div>
-                  <p style={{ fontSize:13,color:"#999",lineHeight:1.5,margin:0 }}>{goals[id].goal}</p>
+                  <p style={{ fontSize:13, color:"#999", lineHeight:1.5, margin:0 }}>{goals[id].goal}</p>
                   {last7.length > 0 && (
-                    <div style={{ display:"flex",gap:3,alignItems:"flex-end",height:22 }}>
-                      {last7.map((l, i) => <div key={i} style={{ flex:1,minHeight:3,height:`${Math.max(12,Math.abs(l.delta)/20*100)}%`,background:l.delta>=0?(c?.color||"#FFD700")+"88":"#E87C7C88",borderRadius:2 }} />)}
+                    <div style={{ display:"flex", gap:3, alignItems:"flex-end", height:22 }}>
+                      {last7.map((l, i) => <div key={i} style={{ flex:1, minHeight:3, height:`${Math.max(12,Math.abs(l.delta)/20*100)}%`, background:l.delta>=0?(c?.color||"#FFD700")+"88":"#E87C7C88", borderRadius:2 }} />)}
                     </div>
                   )}
-                  <div style={{ display:"flex",gap:7 }}>
+                  <div style={{ display:"flex", gap:7 }}>
                     {!logged
-                      ? <button onClick={() => { setDailyActive(id); setTab("dailycheckin"); }}
-                          style={{ flex:1,background:`rgba(${hexRgb(c?.color||"#FFD700")},0.1)`,border:`1px solid ${c?.color}44`,borderRadius:7,padding:"6px",fontSize:12,color:c?.color,cursor:"pointer",fontFamily:"Georgia,serif" }}>
-                          + Check in today
-                        </button>
-                      : <span style={{ fontSize:12,color:(c?.color||"#FFD700")+"aa",padding:"6px 0",flex:1 }}>&#10003; Logged</span>
-                    }
-                    <button onClick={() => { setActiveId(id); setTab("chat"); }} style={{ background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:7,padding:"6px 10px",fontSize:12,color:"#aaa",cursor:"pointer",fontFamily:"Georgia,serif" }}>Coach</button>
-                    <button onClick={() => { setActiveId(id); setTab("progress"); }} style={{ background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:7,padding:"6px 10px",fontSize:12,color:"#aaa",cursor:"pointer",fontFamily:"Georgia,serif" }}>History</button>
+                      ? <button onClick={() => { setDailyActive(id); setTab("dailycheckin"); }} style={{ flex:1, background:`rgba(${hexRgb(c?.color||"#FFD700")},0.1)`, border:`1px solid ${c?.color}44`, borderRadius:7, padding:"6px", fontSize:12, color:c?.color, cursor:"pointer", fontFamily:"Georgia,serif" }}>+ Check in</button>
+                      : <span style={{ fontSize:12, color:(c?.color||"#FFD700")+"aa", padding:"6px 0", flex:1 }}>✓ Logged</span>}
+                    <button onClick={() => { setActiveId(id); setTab("chat"); }} style={{ background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:7, padding:"6px 10px", fontSize:12, color:"#aaa", cursor:"pointer", fontFamily:"Georgia,serif" }}>Coach</button>
+                    <button onClick={() => { setActiveId(id); setTab("progress"); }} style={{ background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:7, padding:"6px 10px", fontSize:12, color:"#aaa", cursor:"pointer", fontFamily:"Georgia,serif" }}>History</button>
                   </div>
                 </div>
               );
             })}
           </div>
-
+          {doneIds.length === 0 && (
+            <div style={{ textAlign:"center", padding:"60px 0" }}>
+              <div style={{ fontSize:40, marginBottom:16 }}>◎</div>
+              <h3 style={{ fontSize:20, fontWeight:400, color:"#fff", margin:"0 0 10px" }}>No goals set yet</h3>
+              <p style={{ color:"#666", fontSize:14, margin:"0 0 24px" }}>Go to Goals and set your first goal to start tracking progress.</p>
+              <button onClick={() => setTab("setup")} style={{ background:"#FFD700", color:"#000", border:"none", borderRadius:9, padding:"12px 24px", fontSize:15, fontFamily:"Georgia,serif", fontWeight:700, cursor:"pointer" }}>Set Your Goals →</button>
+            </div>
+          )}
           {(() => {
-            const unlocked = totalLogs >= 3;
+            const totalLogs2 = doneIds.reduce((a, id) => a + (logs[id]?.length || 0), 0);
             if (vision) return (
-              <div onClick={() => setTab("vision")} style={{ marginTop:26,display:"flex",alignItems:"center",gap:14,background:"rgba(255,215,0,0.05)",border:"1px solid rgba(255,215,0,0.15)",borderRadius:12,padding:"15px 20px",cursor:"pointer" }}>
-                <span style={{ fontSize:20,color:"#FFD700" }}>&#9733;</span>
-                <div><div style={{ fontSize:14,color:"#ddd" }}>Your Life Vision</div><div style={{ fontSize:12,color:"#666" }}>Click to view or regenerate</div></div>
-                <span style={{ marginLeft:"auto",color:"#FFD700" }}>&rarr;</span>
+              <div onClick={() => setTab("vision")} style={{ marginTop:26, display:"flex", alignItems:"center", gap:14, background:"rgba(255,215,0,0.05)", border:"1px solid rgba(255,215,0,0.15)", borderRadius:12, padding:"15px 20px", cursor:"pointer" }}>
+                <span style={{ fontSize:20, color:"#FFD700" }}>★</span>
+                <div><div style={{ fontSize:14, color:"#ddd" }}>Your Life Vision</div><div style={{ fontSize:12, color:"#666" }}>Click to view or regenerate</div></div>
+                <span style={{ marginLeft:"auto", color:"#FFD700" }}>→</span>
               </div>
             );
-            if (unlocked) return (
-              <div style={{ marginTop:26,display:"flex",alignItems:"center",gap:14,background:"rgba(255,215,0,0.06)",border:"1px solid rgba(255,215,0,0.2)",borderRadius:12,padding:"18px 22px" }}>
-                <div>
-                  <div style={{ fontSize:14,color:"#FFD700",marginBottom:4 }}>&#9733; Your Life Vision is ready</div>
-                  <div style={{ fontSize:13,color:"#666" }}>You've logged {totalLogs} check-ins. You've earned this.</div>
-                </div>
-                <button onClick={() => { setTab("vision"); generateVision(); }} style={{ marginLeft:"auto",background:"#FFD700",color:"#000",border:"none",borderRadius:8,padding:"10px 20px",fontSize:14,fontFamily:"Georgia,serif",fontWeight:700,cursor:"pointer",whiteSpace:"nowrap" }}>Generate &rarr;</button>
+            if (totalLogs2 >= 3) return (
+              <div style={{ marginTop:26, display:"flex", alignItems:"center", gap:14, background:"rgba(255,215,0,0.06)", border:"1px solid rgba(255,215,0,0.2)", borderRadius:12, padding:"18px 22px" }}>
+                <div><div style={{ fontSize:14, color:"#FFD700", marginBottom:4 }}>★ Your Life Vision is ready</div><div style={{ fontSize:13, color:"#666" }}>You've logged {totalLogs2} check-ins. You've earned this.</div></div>
+                <button onClick={() => { setTab("vision"); generateVision(); }} style={{ marginLeft:"auto", background:"#FFD700", color:"#000", border:"none", borderRadius:8, padding:"10px 20px", fontSize:14, fontFamily:"Georgia,serif", fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>Generate →</button>
               </div>
             );
             return (
-              <div style={{ marginTop:26,background:"rgba(255,255,255,0.02)",border:"1px dashed rgba(255,255,255,0.08)",borderRadius:12,padding:"18px 22px",display:"flex",alignItems:"center",gap:14 }}>
-                <span style={{ fontSize:18,color:"#444" }}>&#9733;</span>
-                <div><div style={{ fontSize:14,color:"#555" }}>Life Vision unlocks after 3 check-ins</div><div style={{ fontSize:12,color:"#444",marginTop:2 }}>{totalLogs}/3 check-ins done</div></div>
-                <div style={{ marginLeft:"auto",height:4,width:80,background:"rgba(255,255,255,0.06)",borderRadius:2,overflow:"hidden" }}><div style={{ height:"100%",width:`${Math.min(100,(totalLogs/3)*100)}%`,background:"#FFD700",borderRadius:2,transition:"width 0.6s ease" }} /></div>
+              <div style={{ marginTop:26, background:"rgba(255,255,255,0.02)", border:"1px dashed rgba(255,255,255,0.08)", borderRadius:12, padding:"18px 22px", display:"flex", alignItems:"center", gap:14 }}>
+                <span style={{ fontSize:18, color:"#444" }}>★</span>
+                <div><div style={{ fontSize:14, color:"#555" }}>Life Vision unlocks after 3 check-ins</div><div style={{ fontSize:12, color:"#444", marginTop:2 }}>{totalLogs2}/3 done</div></div>
+                <div style={{ marginLeft:"auto", height:4, width:80, background:"rgba(255,255,255,0.06)", borderRadius:2, overflow:"hidden" }}><div style={{ height:"100%", width:`${Math.min(100,(totalLogs2/3)*100)}%`, background:"#FFD700", borderRadius:2 }} /></div>
               </div>
             );
           })()}
@@ -1369,68 +1608,67 @@ export default function App() {
       logList.forEach(l => { const m = l.date.slice(0,7); if (!byMonth[m]) byMonth[m] = []; byMonth[m].push(l); });
       const s = sc(activeId);
       if (!activeId) return (
-        <div style={{ padding:"60px 26px",textAlign:"center" }}>
-          <div style={{ fontSize:40,marginBottom:16,color:"#333" }}>&#9678;</div>
-          <h3 style={{ fontSize:18,fontWeight:400,color:"#555",margin:"0 0 10px" }}>No goal selected</h3>
-          <p style={{ color:"#444",fontSize:14,margin:"0 0 24px" }}>Go to your dashboard and click "History" on any goal to see its progress here.</p>
-          <button onClick={() => setTab("dashboard")} style={{ background:"rgba(255,215,0,0.1)",border:"1px solid rgba(255,215,0,0.2)",borderRadius:8,padding:"10px 20px",fontSize:14,color:"#FFD700",cursor:"pointer",fontFamily:"Georgia,serif" }}>Go to Dashboard</button>
+        <div style={{ padding:"60px 26px", textAlign:"center" }}>
+          <div style={{ fontSize:40, marginBottom:16, color:"#333" }}>◎</div>
+          <h3 style={{ fontSize:18, fontWeight:400, color:"#555", margin:"0 0 10px" }}>No goal selected</h3>
+          <p style={{ color:"#444", fontSize:14, margin:"0 0 24px" }}>Click "History" on any goal from the dashboard.</p>
+          <button onClick={() => setTab("dashboard")} style={{ background:"rgba(255,215,0,0.1)", border:"1px solid rgba(255,215,0,0.2)", borderRadius:8, padding:"10px 20px", fontSize:14, color:"#FFD700", cursor:"pointer", fontFamily:"Georgia,serif" }}>Go to Dashboard</button>
         </div>
       );
       const streak = getStreak(logList);
-      const thisWeekLogs = logList.filter(l => { const d = new Date(l.date); const now = new Date(); const weekAgo = new Date(now); weekAgo.setDate(weekAgo.getDate()-7); return d >= weekAgo; });
+      const thisWeekLogs = logList.filter(l => { const d = new Date(l.date); const now = new Date(); const wAgo = new Date(now); wAgo.setDate(wAgo.getDate()-7); return d >= wAgo; });
       const weekNet = thisWeekLogs.reduce((a, l) => a + l.delta, 0);
       return (
-        <div style={{ padding:"34px 26px",maxWidth:900,margin:"0 auto" }}>
-          <button onClick={() => setTab("dashboard")} style={{ background:"none",border:"none",color:"#666",cursor:"pointer",fontSize:14,fontFamily:"Georgia,serif",padding:"0 0 18px",display:"block" }}>&larr; Back to Dashboard</button>
-          <div style={{ display:"flex",alignItems:"center",gap:14,marginBottom:30 }}>
-            <span style={{ color:c?.color,fontSize:28 }}>{c?.icon}</span>
-            <div><h2 style={{ fontSize:24,fontWeight:400,color:"#fff",margin:"0 0 4px" }}>{c?.name} Progress</h2><p style={{ color:"#888",fontSize:13,margin:0 }}>{goals[activeId]?.goal}</p></div>
-            <AnimatedRing pct={s} prevPct={undefined} color={c?.color||"#FFD700"} size={76} stroke={6} />
+        <div style={{ padding:"34px 26px", maxWidth:900, margin:"0 auto" }}>
+          <button onClick={() => setTab("dashboard")} style={{ background:"none", border:"none", color:"#666", cursor:"pointer", fontSize:14, fontFamily:"Georgia,serif", padding:"0 0 18px", display:"block" }}>← Back</button>
+          <div style={{ display:"flex", alignItems:"center", gap:14, marginBottom:30 }}>
+            <span style={{ color:c?.color, fontSize:28 }}>{c?.icon}</span>
+            <div><h2 style={{ fontSize:24, fontWeight:400, color:"#fff", margin:"0 0 4px" }}>{c?.name} Progress</h2><p style={{ color:"#888", fontSize:13, margin:0 }}>{goals[activeId]?.goal}</p></div>
+            <div style={{ marginLeft:"auto" }}><AnimatedRing pct={s} prevPct={undefined} color={c?.color||"#FFD700"} size={76} stroke={6} /></div>
           </div>
           {thisWeekLogs.length > 0 && (
-            <div style={{ background:"rgba(255,215,0,0.04)",border:"1px solid rgba(255,215,0,0.15)",borderRadius:14,padding:"18px 22px",marginBottom:22 }}>
-              <div style={{ fontSize:12,color:"#FFD700",letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:12 }}>This Week</div>
-              <div style={{ display:"flex",gap:24,flexWrap:"wrap" }}>
-                <div><div style={{ fontSize:20,color:weekNet>=0?"#7CE8A0":"#E87C7C" }}>{weekNet>=0?"+":""}{weekNet} pts</div><div style={{ fontSize:11,color:"#555" }}>net change</div></div>
-                <div><div style={{ fontSize:20,color:"#FFD700" }}>{thisWeekLogs.length}</div><div style={{ fontSize:11,color:"#555" }}>check-ins</div></div>
-                <div><div style={{ fontSize:20,color:"#FF9500" }}>{(thisWeekLogs.reduce((a,l)=>a+l.mood,0)/thisWeekLogs.length).toFixed(1)}/5</div><div style={{ fontSize:11,color:"#555" }}>avg mood</div></div>
-                {thisWeekLogs.length > 0 && <div style={{ flex:1,minWidth:160 }}><div style={{ fontSize:12,color:"#555",marginBottom:4 }}>Best entry this week</div><div style={{ fontSize:13,color:"#aaa",fontStyle:"italic" }}>"{thisWeekLogs.reduce((b,l)=>l.delta>b.delta?l:b,thisWeekLogs[0]).note.slice(0,80)}..."</div></div>}
+            <div style={{ background:"rgba(255,215,0,0.04)", border:"1px solid rgba(255,215,0,0.15)", borderRadius:14, padding:"18px 22px", marginBottom:22 }}>
+              <div style={{ fontSize:12, color:"#FFD700", letterSpacing:"0.12em", textTransform:"uppercase", marginBottom:12 }}>This Week</div>
+              <div style={{ display:"flex", gap:24, flexWrap:"wrap" }}>
+                <div><div style={{ fontSize:20, color:weekNet>=0?"#7CE8A0":"#E87C7C" }}>{weekNet>=0?"+":""}{weekNet} pts</div><div style={{ fontSize:11, color:"#555" }}>net change</div></div>
+                <div><div style={{ fontSize:20, color:"#FFD700" }}>{thisWeekLogs.length}</div><div style={{ fontSize:11, color:"#555" }}>check-ins</div></div>
+                <div><div style={{ fontSize:20, color:"#FF9500" }}>{(thisWeekLogs.reduce((a,l)=>a+l.mood,0)/thisWeekLogs.length).toFixed(1)}/5</div><div style={{ fontSize:11, color:"#555" }}>avg mood</div></div>
               </div>
             </div>
           )}
-          <div style={{ display:"flex",gap:10,marginBottom:26,flexWrap:"wrap" }}>
-            {[{l:"Total Logs",v:logList.length},{l:"This Month",v:(byMonth[monthStr()]||[]).length},{l:"Streak",v:`${streak}d`},{l:"Best",v:logList.length?`+${Math.max(...logList.map(l=>l.delta))}`:"--"},{l:"Avg Mood",v:logList.length?`${(logList.reduce((a,l)=>a+l.mood,0)/logList.length).toFixed(1)}/5`:"--"}].map(st => (
-              <div key={st.l} style={{ background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:12,padding:"14px 18px",flex:1,minWidth:80,textAlign:"center" }}>
-                <div style={{ fontSize:22,color:c?.color }}>{st.v}</div>
-                <div style={{ fontSize:11,color:"#666",marginTop:4 }}>{st.l}</div>
-              </div>
-            ))}
-          </div>
-          {logList.length === 0 && (
-            <div style={{ textAlign:"center",padding:"60px 0" }}>
-              <div style={{ fontSize:14,color:"#555",marginBottom:16 }}>No check-ins yet for this goal.</div>
-              <div style={{ fontSize:13,color:"#444",marginBottom:24 }}>30 days from now this page will tell your story. Start today.</div>
-              <button onClick={() => { setDailyActive(activeId); setTab("dailycheckin"); }} style={{ background:"#FFD700",color:"#000",border:"none",borderRadius:9,padding:"12px 24px",fontSize:14,fontFamily:"Georgia,serif",fontWeight:700,cursor:"pointer" }}>Start First Check-in &rarr;</button>
+          {logList.length === 0 ? (
+            <div style={{ textAlign:"center", padding:"60px 0" }}>
+              <div style={{ fontSize:14, color:"#555", marginBottom:12 }}>No check-ins yet for this goal.</div>
+              <div style={{ fontSize:13, color:"#444", marginBottom:24 }}>30 days from now this page will tell your story. Start today.</div>
+              <button onClick={() => { setDailyActive(activeId); setTab("dailycheckin"); }} style={{ background:"#FFD700", color:"#000", border:"none", borderRadius:9, padding:"12px 24px", fontSize:14, fontFamily:"Georgia,serif", fontWeight:700, cursor:"pointer" }}>Start First Check-in →</button>
             </div>
-          )}
-          {Object.keys(byMonth).sort().reverse().map(m => (
-            <div key={m} style={{ background:"rgba(255,255,255,0.02)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:12,padding:20,marginBottom:12 }}>
-              <div style={{ display:"flex",justifyContent:"space-between",marginBottom:12 }}>
-                <div style={{ fontSize:14,color:c?.color }}>{formatMonth(m)}</div>
-                <div style={{ fontSize:13,color:"#888" }}>{byMonth[m].length} logs &middot; net {byMonth[m].reduce((a,l)=>a+l.delta,0)>=0?"+":""}{byMonth[m].reduce((a,l)=>a+l.delta,0)}</div>
+          ) : (
+            <>
+              <div style={{ display:"flex", gap:10, marginBottom:26, flexWrap:"wrap" }}>
+                {[{l:"Total Logs",v:logList.length},{l:"This Month",v:(byMonth[monthStr()]||[]).length},{l:"Streak",v:`${streak}d`},{l:"Best",v:`+${Math.max(...logList.map(l=>l.delta))}`},{l:"Avg Mood",v:`${(logList.reduce((a,l)=>a+l.mood,0)/logList.length).toFixed(1)}/5`}].map(st => (
+                  <div key={st.l} style={{ background:"rgba(255,255,255,0.03)", border:"1px solid rgba(255,255,255,0.07)", borderRadius:12, padding:"14px 18px", flex:1, minWidth:80, textAlign:"center" }}>
+                    <div style={{ fontSize:22, color:c?.color }}>{st.v}</div>
+                    <div style={{ fontSize:11, color:"#666", marginTop:4 }}>{st.l}</div>
+                  </div>
+                ))}
               </div>
-              <div style={{ display:"flex",gap:3,alignItems:"flex-end",height:38,marginBottom:12 }}>
-                {byMonth[m].map((l, i) => <div key={i} style={{ flex:1,minWidth:4,height:`${Math.max(10,Math.abs(l.delta)/20*100)}%`,background:l.delta>=0?(c?.color||"#FFD700")+"99":"#E87C7C99",borderRadius:2 }} />)}
-              </div>
-              {byMonth[m].slice().reverse().map((l, i) => (
-                <div key={i} style={{ display:"flex",gap:10,paddingBottom:8,marginBottom:8,borderBottom:"1px solid rgba(255,255,255,0.05)" }}>
-                  <span style={{ fontSize:12,color:"#666",whiteSpace:"nowrap",minWidth:48 }}>{l.date.slice(5)}</span>
-                  <span style={{ fontSize:12,color:l.delta>=0?"#7CE8A0":"#E87C7C",whiteSpace:"nowrap" }}>{l.delta>=0?"+":""}{l.delta}</span>
-                  <span style={{ fontSize:13,color:"#aaa",lineHeight:1.5 }}>{l.note}</span>
+              {Object.keys(byMonth).sort().reverse().map(m => (
+                <div key={m} style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(255,255,255,0.07)", borderRadius:12, padding:20, marginBottom:12 }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", marginBottom:12 }}>
+                    <div style={{ fontSize:14, color:c?.color }}>{formatMonth(m)}</div>
+                    <div style={{ fontSize:13, color:"#888" }}>{byMonth[m].length} logs · net {byMonth[m].reduce((a,l)=>a+l.delta,0)>=0?"+":""}{byMonth[m].reduce((a,l)=>a+l.delta,0)}</div>
+                  </div>
+                  {byMonth[m].slice().reverse().map((l, i) => (
+                    <div key={i} style={{ display:"flex", gap:10, paddingBottom:8, marginBottom:8, borderBottom:"1px solid rgba(255,255,255,0.05)" }}>
+                      <span style={{ fontSize:12, color:"#666", whiteSpace:"nowrap", minWidth:48 }}>{l.date.slice(5)}</span>
+                      <span style={{ fontSize:12, color:l.delta>=0?"#7CE8A0":"#E87C7C", whiteSpace:"nowrap" }}>{l.delta>=0?"+":""}{l.delta}</span>
+                      <span style={{ fontSize:13, color:"#aaa", lineHeight:1.5 }}>{l.note}</span>
+                    </div>
+                  ))}
                 </div>
               ))}
-            </div>
-          ))}
+            </>
+          )}
         </div>
       );
     }
@@ -1439,53 +1677,50 @@ export default function App() {
       const c = cat(activeId);
       const msgs = chats[activeId] || [];
       if (!activeId) return (
-        <div style={{ padding:"60px 26px",textAlign:"center" }}>
-          <div style={{ fontSize:40,marginBottom:16,color:"#333" }}>C</div>
-          <h3 style={{ fontSize:18,fontWeight:400,color:"#555",margin:"0 0 10px" }}>No goal selected</h3>
-          <p style={{ color:"#444",fontSize:14,margin:"0 0 24px" }}>Go to your dashboard and click "Coach" on any goal to open a dedicated coaching session.</p>
-          <button onClick={() => setTab("dashboard")} style={{ background:"rgba(255,215,0,0.1)",border:"1px solid rgba(255,215,0,0.2)",borderRadius:8,padding:"10px 20px",fontSize:14,color:"#FFD700",cursor:"pointer",fontFamily:"Georgia,serif" }}>Go to Dashboard</button>
+        <div style={{ padding:"60px 26px", textAlign:"center" }}>
+          <div style={{ fontSize:40, marginBottom:16, color:"#333" }}>C</div>
+          <h3 style={{ fontSize:18, fontWeight:400, color:"#555", margin:"0 0 10px" }}>No goal selected</h3>
+          <p style={{ color:"#444", fontSize:14, margin:"0 0 24px" }}>Click "Coach" on any goal from the dashboard.</p>
+          <button onClick={() => setTab("dashboard")} style={{ background:"rgba(255,215,0,0.1)", border:"1px solid rgba(255,215,0,0.2)", borderRadius:8, padding:"10px 20px", fontSize:14, color:"#FFD700", cursor:"pointer", fontFamily:"Georgia,serif" }}>Go to Dashboard</button>
         </div>
       );
       return (
-        <div style={{ display:"flex",height:"calc(100vh - 58px)" }}>
-          <div style={{ width:240,borderRight:"1px solid rgba(255,255,255,0.07)",padding:20,flexShrink:0,overflowY:"auto" }}>
-            <button onClick={() => setTab("dashboard")} style={{ background:"none",border:"none",color:"#666",cursor:"pointer",fontSize:14,fontFamily:"Georgia,serif",padding:"0 0 14px",display:"block" }}>&larr; Back</button>
-            <div style={{ color:c?.color,fontSize:24,marginBottom:6 }}>{c?.icon}</div>
-            <div style={{ fontSize:14,color:c?.color,marginBottom:8 }}>{c?.name}</div>
-            <div style={{ fontSize:12,color:"#777",lineHeight:1.5,marginBottom:14 }}>{goals[activeId]?.goal}</div>
+        <div style={{ display:"flex", height:"calc(100vh - 58px)" }}>
+          <div style={{ width:240, borderRight:"1px solid rgba(255,255,255,0.07)", padding:20, flexShrink:0, overflowY:"auto" }}>
+            <button onClick={() => setTab("dashboard")} style={{ background:"none", border:"none", color:"#666", cursor:"pointer", fontSize:14, fontFamily:"Georgia,serif", padding:"0 0 14px", display:"block" }}>← Back</button>
+            <div style={{ color:c?.color, fontSize:24, marginBottom:6 }}>{c?.icon}</div>
+            <div style={{ fontSize:14, color:c?.color, marginBottom:8 }}>{c?.name}</div>
+            <div style={{ fontSize:12, color:"#777", lineHeight:1.5, marginBottom:14 }}>{goals[activeId]?.goal}</div>
             <AnimatedRing pct={sc(activeId)} prevPct={undefined} color={c?.color||"#FFD700"} size={60} stroke={5} />
-            <div style={{ fontSize:11,color:"#555",letterSpacing:"0.1em",textTransform:"uppercase",margin:"18px 0 10px" }}>Other Goals</div>
-            {doneIds.filter(id => id !== activeId).map(id => {
-              const cc = cat(id);
-              return (<div key={id} onClick={() => setActiveId(id)} style={{ display:"flex",gap:8,alignItems:"center",padding:"7px 0",cursor:"pointer",borderBottom:"1px solid rgba(255,255,255,0.05)" }}><span style={{ color:cc?.color }}>{cc?.icon}</span><span style={{ fontSize:12,color:"#888" }}>{cc?.name}</span></div>);
-            })}
+            <div style={{ fontSize:11, color:"#555", letterSpacing:"0.1em", textTransform:"uppercase", margin:"18px 0 10px" }}>Other Goals</div>
+            {doneIds.filter(id => id !== activeId).map(id => { const cc = cat(id); return (<div key={id} onClick={() => setActiveId(id)} style={{ display:"flex", gap:8, alignItems:"center", padding:"7px 0", cursor:"pointer", borderBottom:"1px solid rgba(255,255,255,0.05)" }}><span style={{ color:cc?.color }}>{cc?.icon}</span><span style={{ fontSize:12, color:"#888" }}>{cc?.name}</span></div>); })}
           </div>
-          <div style={{ flex:1,display:"flex",flexDirection:"column" }}>
-            <div style={{ flex:1,overflowY:"auto",padding:"26px 34px",display:"flex",flexDirection:"column",gap:13 }}>
+          <div style={{ flex:1, display:"flex", flexDirection:"column" }}>
+            <div style={{ flex:1, overflowY:"auto", padding:"26px 34px", display:"flex", flexDirection:"column", gap:13 }}>
               {msgs.length === 0 && (
-                <div style={{ textAlign:"center",padding:"60px 20px",color:"#666" }}>
-                  <div style={{ fontSize:38,color:c?.color,marginBottom:10 }}>{c?.icon}</div>
-                  <div style={{ fontSize:16,color:"#ddd",marginBottom:8 }}>Coaching for {c?.name}</div>
-                  <div style={{ fontSize:14,lineHeight:1.6,maxWidth:340,margin:"0 auto",color:"#666" }}>Ask anything. I know your goal, your score, and your history. Let's figure out what's actually going on.</div>
+                <div style={{ textAlign:"center", padding:"60px 20px", color:"#666" }}>
+                  <div style={{ fontSize:38, color:c?.color, marginBottom:10 }}>{c?.icon}</div>
+                  <div style={{ fontSize:16, color:"#ddd", marginBottom:8 }}>Coaching for {c?.name}</div>
+                  <div style={{ fontSize:14, lineHeight:1.6, maxWidth:340, margin:"0 auto" }}>Ask anything. I know your goal, your score, and your history.</div>
                 </div>
               )}
               {msgs.map((m, i) => (
-                <div key={i} style={{ display:"flex",justifyContent:m.role==="user"?"flex-end":"flex-start" }}>
-                  <div style={{ maxWidth:"70%",padding:"12px 16px",borderRadius:m.role==="user"?"14px 14px 4px 14px":"14px 14px 14px 4px",background:m.role==="user"?`rgba(${hexRgb(c?.color||"#FFD700")},0.15)`:"rgba(255,255,255,0.05)",border:m.role==="user"?`1px solid ${c?.color}44`:"1px solid rgba(255,255,255,0.08)",fontSize:14,color:"#ddd",lineHeight:1.7,whiteSpace:"pre-wrap" }}>
-                    <div style={{ fontSize:11,color:m.role==="user"?c?.color:"#555",marginBottom:5 }}>{m.role==="user"?"You":"Coach"}</div>
+                <div key={i} style={{ display:"flex", justifyContent:m.role==="user"?"flex-end":"flex-start" }}>
+                  <div style={{ maxWidth:"70%", padding:"12px 16px", borderRadius:m.role==="user"?"14px 14px 4px 14px":"14px 14px 14px 4px", background:m.role==="user"?`rgba(${hexRgb(c?.color||"#FFD700")},0.15)`:"rgba(255,255,255,0.05)", border:m.role==="user"?`1px solid ${c?.color}44`:"1px solid rgba(255,255,255,0.08)", fontSize:14, color:"#ddd", lineHeight:1.7, whiteSpace:"pre-wrap" }}>
+                    <div style={{ fontSize:11, color:m.role==="user"?c?.color:"#555", marginBottom:5 }}>{m.role==="user"?"You":"Coach"}</div>
                     {m.content}
                   </div>
                 </div>
               ))}
-              {chatLoading && <div style={{ display:"flex" }}><div style={{ padding:"12px 16px",background:"rgba(255,255,255,0.05)",borderRadius:"14px 14px 14px 4px",border:"1px solid rgba(255,255,255,0.08)",color:"#666",fontSize:14 }}>thinking...</div></div>}
+              {chatLoading && <div style={{ display:"flex" }}><div style={{ padding:"12px 16px", background:"rgba(255,255,255,0.05)", borderRadius:"14px 14px 14px 4px", border:"1px solid rgba(255,255,255,0.08)", color:"#666", fontSize:14 }}>thinking...</div></div>}
               <div ref={chatEndRef} />
             </div>
-            <div style={{ padding:"13px 26px",borderTop:"1px solid rgba(255,255,255,0.07)",background:"rgba(0,0,0,0.3)",display:"flex",gap:10 }}>
-              <input style={{ flex:1,background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:9,padding:"10px 14px",fontSize:14,color:"#fff",fontFamily:"Georgia,serif",outline:"none" }}
+            <div style={{ padding:"13px 26px", borderTop:"1px solid rgba(255,255,255,0.07)", background:"rgba(0,0,0,0.3)", display:"flex", gap:10 }}>
+              <input style={{ flex:1, background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:9, padding:"10px 14px", fontSize:14, color:"#fff", fontFamily:"Georgia,serif", outline:"none" }}
                 placeholder={`Ask about your ${c?.name} goal...`}
                 value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => e.key==="Enter" && sendGoalChat()} />
               <button onClick={sendGoalChat} disabled={!chatInput.trim() || chatLoading}
-                style={{ background:c?.color||"#FFD700",border:"none",borderRadius:9,padding:"10px 18px",fontSize:16,color:"#000",cursor:"pointer" }}>&rarr;</button>
+                style={{ background:c?.color||"#FFD700", border:"none", borderRadius:9, padding:"10px 18px", fontSize:16, color:"#000", cursor:"pointer" }}>→</button>
             </div>
           </div>
         </div>
@@ -1494,84 +1729,41 @@ export default function App() {
 
     if (tab === "vision") {
       const avgScore = doneIds.length ? Math.round(doneIds.reduce((a, id) => a + sc(id), 0) / doneIds.length) : 0;
-      const totalLogs = doneIds.reduce((a, id) => a + (logs[id]?.length || 0), 0);
       const topGoals = [...doneIds].sort((a,b) => sc(b) - sc(a));
       const needsWork = [...doneIds].sort((a,b) => sc(a) - sc(b)).slice(0, 3);
-      const LifeWheel = () => {
-        const size = 280, cx = 140, cy = 140, maxR = 110;
-        const n = doneIds.length;
-        if (n < 3) return null;
-        const pts = doneIds.map((id, i) => { const angle = (i/n)*2*Math.PI - Math.PI/2; const r = (sc(id)/100)*maxR; return { x: cx+r*Math.cos(angle), y: cy+r*Math.sin(angle), id }; });
-        const gridPts = (pct) => doneIds.map((_,i) => { const angle = (i/n)*2*Math.PI - Math.PI/2; const r = (pct/100)*maxR; return `${cx+r*Math.cos(angle)},${cy+r*Math.sin(angle)}`; }).join(" ");
-        const poly = pts.map(p => `${p.x},${p.y}`).join(" ");
-        return (
-          <svg width={size} height={size} style={{ overflow:"visible" }}>
-            {[25,50,75,100].map(pct => <polygon key={pct} points={gridPts(pct)} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="1" />)}
-            {doneIds.map((id,i) => { const angle = (i/n)*2*Math.PI - Math.PI/2; return <line key={id} x1={cx} y1={cy} x2={cx+maxR*Math.cos(angle)} y2={cy+maxR*Math.sin(angle)} stroke="rgba(255,255,255,0.07)" strokeWidth="1" />; })}
-            <polygon points={poly} fill="rgba(255,215,0,0.12)" stroke="#FFD700" strokeWidth="1.5" strokeLinejoin="round" />
-            {pts.map((p,i) => { const c = cat(p.id); return <circle key={i} cx={p.x} cy={p.y} r={4} fill={c?.color||"#FFD700"} stroke="#080808" strokeWidth="2" />; })}
-            {doneIds.map((id,i) => { const angle = (i/n)*2*Math.PI - Math.PI/2; const lx = cx+(maxR+22)*Math.cos(angle); const ly = cy+(maxR+22)*Math.sin(angle); const c = cat(id); return <g key={id}><text x={lx} y={ly-4} textAnchor="middle" fill={c?.color||"#888"} fontSize="10" fontFamily="Georgia,serif">{c?.icon}</text><text x={lx} y={ly+10} textAnchor="middle" fill="#666" fontSize="8" fontFamily="Georgia,serif">{sc(id)}</text></g>; })}
-            <text x={cx} y={cy-8} textAnchor="middle" fill="#FFD700" fontSize="22" fontFamily="Georgia,serif" fontWeight="bold">{avgScore}</text>
-            <text x={cx} y={cy+10} textAnchor="middle" fill="#666" fontSize="9" fontFamily="Georgia,serif">overall</text>
-          </svg>
-        );
-      };
       return (
-        <div style={{ padding:"34px 26px",maxWidth:960,margin:"0 auto" }}>
-          <div style={{ textAlign:"center",marginBottom:40 }}>
-            <div style={{ fontSize:46,color:"#FFD700" }}>&#9733;</div>
-            <h2 style={{ fontSize:30,fontWeight:400,color:"#fff",margin:"12px 0 8px" }}>{userName}'s Life Vision</h2>
-            <p style={{ color:"#666",fontSize:14,margin:0 }}>Synthesized from {doneIds.length} goals &middot; {totalLogs} check-ins logged</p>
+        <div style={{ padding:"34px 26px", maxWidth:900, margin:"0 auto" }}>
+          <div style={{ textAlign:"center", marginBottom:36 }}>
+            <div style={{ fontSize:42, color:"#FFD700" }}>★</div>
+            <h2 style={{ fontSize:28, fontWeight:400, color:"#fff", margin:"12px 0 6px" }}>{userName}'s Life Vision</h2>
+            <p style={{ color:"#666", fontSize:14, margin:0 }}>{doneIds.length} goals · {doneIds.reduce((a, id) => a + (logs[id]?.length || 0), 0)} check-ins</p>
           </div>
           {visionLoading && (
-            <div style={{ textAlign:"center",padding:"60px 0" }}>
-              <div style={{ width:34,height:34,border:"2px solid rgba(255,215,0,0.2)",borderTop:"2px solid #FFD700",borderRadius:"50%",animation:"sooSpin 1s linear infinite",margin:"0 auto" }} />
-              <p style={{ color:"#888",marginTop:18 }}>Weaving your life vision...</p>
+            <div style={{ textAlign:"center", padding:"60px 0" }}>
+              <div style={{ width:34, height:34, border:"2px solid rgba(255,215,0,0.2)", borderTop:"2px solid #FFD700", borderRadius:"50%", animation:"sooSpin 1s linear infinite", margin:"0 auto" }} />
+              <p style={{ color:"#888", marginTop:18 }}>Weaving your vision...</p>
             </div>
           )}
-          {!visionLoading && doneIds.length > 0 && (
-            <div>
-              <div style={{ display:"grid",gridTemplateColumns:"auto 1fr",gap:32,marginBottom:36,alignItems:"center" }}>
-                <div style={{ display:"flex",flexDirection:"column",alignItems:"center",gap:10 }}>
-                  <div style={{ fontSize:11,color:"#666",letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:4 }}>Life Wheel</div>
-                  {doneIds.length >= 3 ? <LifeWheel /> : <div style={{ width:280,height:280,display:"flex",alignItems:"center",justifyContent:"center",color:"#555",fontSize:13,textAlign:"center",border:"1px dashed rgba(255,255,255,0.1)",borderRadius:12 }}>Set 3+ goals to see your wheel</div>}
-                </div>
-                <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
-                  <div style={{ background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:14,padding:"18px 20px" }}>
-                    <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10 }}>
-                      <span style={{ fontSize:13,color:"#ddd" }}>Overall Life Progress</span>
-                      <span style={{ fontSize:22,color:"#FFD700",fontWeight:700 }}>{avgScore}%</span>
-                    </div>
-                    <div style={{ height:10,background:"rgba(255,255,255,0.07)",borderRadius:5,overflow:"hidden" }}><div style={{ height:"100%",width:`${avgScore}%`,background:"linear-gradient(90deg,#FFD700,#FF9500)",borderRadius:5,transition:"width 1s ease" }} /></div>
-                  </div>
-                  {doneIds.map(id => { const c = cat(id); const s = sc(id); return (<div key={id} style={{ display:"flex",alignItems:"center",gap:12 }}><span style={{ color:c?.color,fontSize:16,width:20,flexShrink:0 }}>{c?.icon}</span><div style={{ flex:1 }}><div style={{ display:"flex",justifyContent:"space-between",marginBottom:4 }}><span style={{ fontSize:12,color:"#ccc" }}>{c?.name}</span><span style={{ fontSize:12,color:c?.color }}>{s}/100</span></div><div style={{ height:5,background:"rgba(255,255,255,0.07)",borderRadius:3,overflow:"hidden" }}><div style={{ height:"100%",width:`${s}%`,background:c?.color,borderRadius:3,transition:"width 0.8s ease" }} /></div></div><span style={{ fontSize:11,color:"#555",minWidth:36,textAlign:"right" }}>{(logs[id]||[]).length} logs</span></div>); })}
-                </div>
-              </div>
-              <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:36 }}>
-                <div style={{ background:"rgba(124,232,160,0.05)",border:"1px solid rgba(124,232,160,0.15)",borderRadius:14,padding:"18px 20px" }}>
-                  <div style={{ fontSize:11,color:"#7CE8A0",letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:14 }}>Strongest Areas</div>
-                  {topGoals.slice(0,3).map(id => { const c = cat(id); return (<div key={id} style={{ display:"flex",alignItems:"center",gap:10,marginBottom:10 }}><span style={{ fontSize:14,color:c?.color }}>{c?.icon}</span><span style={{ fontSize:13,color:"#ccc",flex:1 }}>{c?.name}</span><span style={{ fontSize:12,color:"#7CE8A0" }}>{sc(id)}</span></div>); })}
-                </div>
-                <div style={{ background:"rgba(232,124,124,0.05)",border:"1px solid rgba(232,124,124,0.15)",borderRadius:14,padding:"18px 20px" }}>
-                  <div style={{ fontSize:11,color:"#E87C7C",letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:14 }}>Needs Attention</div>
-                  {needsWork.map(id => { const c = cat(id); return (<div key={id} style={{ display:"flex",alignItems:"center",gap:10,marginBottom:10 }}><span style={{ fontSize:14,color:c?.color }}>{c?.icon}</span><span style={{ fontSize:13,color:"#ccc",flex:1 }}>{c?.name}</span><span style={{ fontSize:11,color:"#E87C7C" }}>+{100-sc(id)} to go</span></div>); })}
-                </div>
-              </div>
-              {vision && (
-                <div style={{ marginBottom:36 }}>
-                  <div style={{ fontSize:11,color:"#666",letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:16,display:"flex",alignItems:"center",gap:10 }}>
-                    <span style={{ flex:1,height:1,background:"rgba(255,255,255,0.06)" }} />Your Life Vision Manifesto<span style={{ flex:1,height:1,background:"rgba(255,255,255,0.06)" }} />
-                  </div>
-                  <div style={{ background:"rgba(255,215,0,0.03)",border:"1px solid rgba(255,215,0,0.12)",borderRadius:16,padding:"34px 38px" }}>
-                    {vision.split("\n").map((line,i) => line.trim() ? <p key={i} style={{ fontSize:17,lineHeight:1.85,color:"#ddd",margin:"0 0 14px" }}>{line}</p> : <br key={i} />)}
-                  </div>
-                </div>
-              )}
+          {!visionLoading && vision && (
+            <div style={{ background:"rgba(255,215,0,0.03)", border:"1px solid rgba(255,215,0,0.12)", borderRadius:16, padding:"30px 36px", marginBottom:28 }}>
+              {vision.split("\n").filter(l=>l.trim()).map((line,i) => (
+                <p key={i} style={{ fontSize:16, lineHeight:1.85, margin:"0 0 14px", color:line.startsWith("Your one commitment")?"#FFD700":"#ddd", fontStyle:line.startsWith("Your one commitment")?"italic":"normal" }}>{line}</p>
+              ))}
             </div>
           )}
-          <div style={{ display:"flex",gap:10,marginTop:8,marginBottom:26 }}>
-            <button onClick={generateVision} style={{ background:"#FFD700",color:"#000",border:"none",borderRadius:9,padding:"12px 22px",fontSize:14,fontFamily:"Georgia,serif",fontWeight:700,cursor:"pointer" }}>{vision?"Regenerate Vision":"Generate Life Vision"}</button>
-            {vision && <button onClick={() => navigator.clipboard?.writeText(vision)} style={{ background:"transparent",border:"1px solid rgba(255,255,255,0.15)",borderRadius:9,padding:"12px 18px",fontSize:14,color:"#aaa",cursor:"pointer",fontFamily:"Georgia,serif" }}>Copy Text</button>}
+          <div style={{ display:"flex", gap:10, marginBottom:28 }}>
+            <button onClick={generateVision} style={{ background:"#FFD700", color:"#000", border:"none", borderRadius:9, padding:"12px 22px", fontSize:14, fontFamily:"Georgia,serif", fontWeight:700, cursor:"pointer" }}>{vision?"Regenerate":"Generate"} Vision</button>
+            {vision && <button onClick={() => navigator.clipboard?.writeText(vision)} style={{ background:"transparent", border:"1px solid rgba(255,255,255,0.15)", borderRadius:9, padding:"12px 18px", fontSize:14, color:"#aaa", cursor:"pointer", fontFamily:"Georgia,serif" }}>Copy</button>}
+          </div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
+            <div style={{ background:"rgba(124,232,160,0.05)", border:"1px solid rgba(124,232,160,0.15)", borderRadius:14, padding:"18px 20px" }}>
+              <div style={{ fontSize:11, color:"#7CE8A0", letterSpacing:"0.1em", textTransform:"uppercase", marginBottom:14 }}>Strongest</div>
+              {topGoals.slice(0,3).map(id => { const c = cat(id); return (<div key={id} style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10 }}><span style={{ color:c?.color }}>{c?.icon}</span><span style={{ fontSize:13, color:"#ccc", flex:1 }}>{c?.name}</span><span style={{ fontSize:12, color:"#7CE8A0" }}>{sc(id)}</span></div>); })}
+            </div>
+            <div style={{ background:"rgba(232,124,124,0.05)", border:"1px solid rgba(232,124,124,0.15)", borderRadius:14, padding:"18px 20px" }}>
+              <div style={{ fontSize:11, color:"#E87C7C", letterSpacing:"0.1em", textTransform:"uppercase", marginBottom:14 }}>Needs Attention</div>
+              {needsWork.map(id => { const c = cat(id); return (<div key={id} style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10 }}><span style={{ color:c?.color }}>{c?.icon}</span><span style={{ fontSize:13, color:"#ccc", flex:1 }}>{c?.name}</span><span style={{ fontSize:11, color:"#E87C7C" }}>+{100-sc(id)} to go</span></div>); })}
+            </div>
           </div>
         </div>
       );
@@ -1580,13 +1772,14 @@ export default function App() {
   };
 
   return (
-    <div style={{ minHeight:"100vh",background:"#080808",color:"#e0e0e0",fontFamily:"Georgia,serif" }}>
-      <Nav tab={tab} setTab={setTab} hasGoals={doneIds.length > 0} userName={userName} />
+    <div style={{ minHeight:"100vh", background:"#080808", color:"#e0e0e0", fontFamily:"Georgia,serif" }}>
+      <Nav tab={tab} setTab={setTab} hasGoals={doneIds.length > 0} userName={userName} onSignOut={handleSignOut} />
       {renderScreen()}
       <Coach userName={userName} goals={goals} scores={scores} logs={logs} lifeVision={vision} currentPage={tab} />
       <style>{`
         *{box-sizing:border-box}body{margin:0;background:#080808}
         @keyframes sooSpin{to{transform:rotate(360deg)}}
+        @keyframes fadeIn{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
         textarea,input{color-scheme:dark}
         ::-webkit-scrollbar{width:4px}
         ::-webkit-scrollbar-track{background:transparent}
