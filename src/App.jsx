@@ -15,6 +15,21 @@ const CATS = [
   { id: 12, name: "Life Vision",       icon: "★", color: "#FFD700" },
 ];
 
+const SUGGESTED_GOALS = {
+  1: "Work out 4 times a week and track my energy levels daily",
+  2: "Read one book per month and apply one idea to my life",
+  3: "Journal for 10 minutes every morning to process my emotions",
+  4: "Do one thing each week that my future self would be proud of",
+  5: "Spend 15 minutes daily in silence, reflection, or prayer",
+  6: "Plan one intentional date or deep conversation with my partner weekly",
+  7: "Be fully present with my children for at least 1 hour daily without my phone",
+  8: "Reach out to one friend I care about every week",
+  9: "Save 20% of income and track every expense",
+  10: "Ship one meaningful piece of work every week in my career",
+  11: "Design my environment so my daily life feels like the life I want",
+  12: "Write down my core values and the person I am becoming",
+};
+
 const todayStr = () => new Date().toISOString().slice(0, 10);
 const monthStr = () => new Date().toISOString().slice(0, 7);
 const cat = (id) => CATS.find(c => c.id === id);
@@ -22,12 +37,8 @@ const cat = (id) => CATS.find(c => c.id === id);
 const store = {
   async get(key) {
     try {
-      if (window.storage) {
-        const r = await window.storage.get(key);
-        return r ? JSON.parse(r.value) : null;
-      }
-      const v = localStorage.getItem(key);
-      return v ? JSON.parse(v) : null;
+      if (window.storage) { const r = await window.storage.get(key); return r ? JSON.parse(r.value) : null; }
+      const v = localStorage.getItem(key); return v ? JSON.parse(v) : null;
     } catch { return null; }
   },
   async set(key, val) {
@@ -49,23 +60,12 @@ const callClaude = async (messages, system) => {
         "anthropic-version": "2023-06-01",
         "anthropic-dangerous-direct-browser-access": "true",
       },
-      body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 1000,
-        system: system || "You are a helpful life coach assistant.",
-        messages: messages,
-      }),
+      body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 1000, system: system || "You are a helpful life coach assistant.", messages }),
     });
     const data = await response.json();
-    if (data.error) {
-      console.error("API error:", data.error.message);
-      return "I'm having trouble connecting right now. Please try again.";
-    }
+    if (data.error) { console.error("API error:", data.error.message); return "I'm having trouble connecting right now. Please try again."; }
     return data.content?.[0]?.text || "No response received.";
-  } catch (err) {
-    console.error("Network error:", err);
-    return "Connection error. Please check your internet and try again.";
-  }
+  } catch (err) { console.error("Network error:", err); return "Connection error. Please check your internet and try again."; }
 };
 
 function getStreak(logs) {
@@ -90,6 +90,10 @@ function hexRgb(hex) {
   const r = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
   return r ? `${parseInt(r[1],16)},${parseInt(r[2],16)},${parseInt(r[3],16)}` : "255,215,0";
 }
+function daysSince(dateStr) {
+  if (!dateStr) return null;
+  return Math.floor((new Date() - new Date(dateStr)) / 86400000);
+}
 const PGQ = ["Make good new things.", "Greatness compounds over time.", "The first steps are most rare and valuable.", "Stay on one thing long enough.", "Curiosity becomes competitive advantage."];
 
 function Ring({ pct, color, size, stroke }) {
@@ -110,6 +114,31 @@ function Bar({ val, color }) {
   return (
     <div style={{ height: 5, background: "rgba(255,255,255,0.07)", borderRadius: 3, overflow: "hidden" }}>
       <div style={{ height: "100%", width: `${Math.max(0,Math.min(100,val))}%`, background: color, borderRadius: 3, transition: "width 0.6s ease" }} />
+    </div>
+  );
+}
+
+function AnimatedRing({ pct, prevPct, color, size, stroke }) {
+  const [display, setDisplay] = useState(prevPct ?? pct);
+  useEffect(() => {
+    const start = prevPct ?? pct;
+    const end = pct;
+    if (start === end) { setDisplay(end); return; }
+    const duration = 1200;
+    const startTime = Date.now();
+    const tick = () => {
+      const elapsed = Date.now() - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setDisplay(Math.round(start + (end - start) * eased));
+      if (progress < 1) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }, [pct]);
+  return (
+    <div style={{ position: "relative", width: size, height: size, flexShrink: 0 }}>
+      <Ring pct={display} color={color} size={size} stroke={stroke} />
+      <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: size * 0.22, color }}>{display}</div>
     </div>
   );
 }
@@ -603,6 +632,114 @@ function LandingPage({ onEnter }) {
   );
 }
 
+
+// ─── ONBOARDING ───────────────────────────────────────────────────────────────
+function Onboarding({ userName, onComplete }) {
+  const [step, setStep] = useState(1);
+  const [picked, setPicked] = useState([]);
+  const [goalInputs, setGoalInputs] = useState({});
+  const [currentGoalIdx, setCurrentGoalIdx] = useState(0);
+
+  const togglePick = (id) => {
+    if (picked.includes(id)) setPicked(picked.filter(p => p !== id));
+    else if (picked.length < 3) setPicked([...picked, id]);
+  };
+
+  const handleGoalNext = () => {
+    if (currentGoalIdx < picked.length - 1) {
+      setCurrentGoalIdx(i => i + 1);
+    } else {
+      const finalGoals = {};
+      const finalScores = {};
+      picked.forEach(id => {
+        const val = goalInputs[id]?.trim() || SUGGESTED_GOALS[id] || "";
+        finalGoals[id] = { goal: val, metrics: "" };
+        finalScores[id] = 50;
+      });
+      onComplete(finalGoals, finalScores);
+    }
+  };
+
+  const currentCatId = picked[currentGoalIdx];
+  const currentCat = cat(currentCatId);
+
+  return (
+    <div style={{ minHeight:"100vh",background:"#080808",fontFamily:"Georgia,serif",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"40px 20px" }}>
+      <style>{`html,body{background:#080808!important;margin:0;padding:0}*{box-sizing:border-box}`}</style>
+      <div style={{ display:"flex",gap:8,marginBottom:48 }}>
+        {[1,2].map(s => (
+          <div key={s} style={{ width:s===step?28:8,height:8,borderRadius:4,background:s===step?"#FFD700":s<step?"rgba(255,215,0,0.4)":"rgba(255,255,255,0.1)",transition:"all 0.3s ease" }} />
+        ))}
+      </div>
+
+      {step === 1 && (
+        <div style={{ maxWidth:700,width:"100%",textAlign:"center" }}>
+          <div style={{ fontSize:11,color:"#FFD700",letterSpacing:"0.2em",textTransform:"uppercase",marginBottom:16,opacity:0.7 }}>Welcome, {userName}</div>
+          <h2 style={{ fontSize:34,fontWeight:400,color:"#fff",margin:"0 0 14px" }}>Pick your top 3 life areas to start.</h2>
+          <p style={{ fontSize:16,color:"#666",margin:"0 0 36px",lineHeight:1.7 }}>Don't try to fix everything at once. Pick the 3 areas that, if improved, would change everything else.</p>
+          <div style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:32 }}>
+            {CATS.map(c => {
+              const sel = picked.includes(c.id);
+              const disabled = !sel && picked.length >= 3;
+              return (
+                <div key={c.id} onClick={() => !disabled && togglePick(c.id)}
+                  style={{ background:sel?`rgba(${hexRgb(c.color)},0.15)`:"rgba(255,255,255,0.02)",border:`1px solid ${sel?c.color:"rgba(255,255,255,0.07)"}`,borderRadius:12,padding:"16px 10px",cursor:disabled?"default":"pointer",opacity:disabled?0.35:1,transition:"all 0.2s",textAlign:"center",position:"relative" }}>
+                  {sel && <div style={{ position:"absolute",top:6,right:8,fontSize:11,color:c.color }}>✓</div>}
+                  <div style={{ fontSize:22,color:c.color,marginBottom:8 }}>{c.icon}</div>
+                  <div style={{ fontSize:12,color:sel?"#fff":"#aaa" }}>{c.name}</div>
+                </div>
+              );
+            })}
+          </div>
+          <div style={{ fontSize:13,color:"#555",marginBottom:20 }}>{picked.length}/3 selected</div>
+          <button onClick={() => { if (picked.length > 0) setStep(2); }} disabled={picked.length === 0}
+            style={{ background:picked.length>0?"#FFD700":"rgba(255,215,0,0.15)",color:picked.length>0?"#000":"#666",border:"none",borderRadius:10,padding:"14px 36px",fontSize:16,fontFamily:"Georgia,serif",fontWeight:700,cursor:picked.length>0?"pointer":"default" }}>
+            {picked.length === 0 ? "Select at least 1" : `Continue with ${picked.length} area${picked.length>1?"s":""} \u2192`}
+          </button>
+          <p style={{ fontSize:12,color:"#444",marginTop:14 }}>You can add more goals later from the Goals page</p>
+        </div>
+      )}
+
+      {step === 2 && currentCat && (
+        <div style={{ maxWidth:540,width:"100%" }}>
+          <div style={{ fontSize:12,color:"#555",textAlign:"center",marginBottom:24 }}>Goal {currentGoalIdx+1} of {picked.length}</div>
+          <div style={{ background:`rgba(${hexRgb(currentCat.color)},0.06)`,border:`1px solid ${currentCat.color}44`,borderRadius:18,padding:"32px 34px",display:"flex",flexDirection:"column",gap:18 }}>
+            <div style={{ display:"flex",alignItems:"center",gap:14 }}>
+              <span style={{ fontSize:32,color:currentCat.color }}>{currentCat.icon}</span>
+              <div>
+                <div style={{ fontSize:20,color:currentCat.color }}>{currentCat.name}</div>
+                <div style={{ fontSize:13,color:"#555",marginTop:2 }}>Set your one goal for this area</div>
+              </div>
+            </div>
+            <div style={{ fontSize:12,color:"#555",fontStyle:"italic",background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.06)",borderRadius:8,padding:"10px 14px" }}>
+              Suggested: {SUGGESTED_GOALS[currentCatId]}
+            </div>
+            <textarea rows={3}
+              value={goalInputs[currentCatId] || ""}
+              onChange={e => setGoalInputs(g => ({ ...g, [currentCatId]: e.target.value }))}
+              placeholder={SUGGESTED_GOALS[currentCatId]}
+              autoFocus
+              style={{ background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"12px 15px",fontSize:15,color:"#fff",fontFamily:"Georgia,serif",outline:"none",resize:"vertical",width:"100%" }} />
+            <div style={{ display:"flex",gap:10 }}>
+              <button onClick={() => { setGoalInputs(g => ({ ...g, [currentCatId]: SUGGESTED_GOALS[currentCatId] })); handleGoalNext(); }}
+                style={{ flex:1,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:9,padding:"12px",fontSize:13,color:"#aaa",cursor:"pointer",fontFamily:"Georgia,serif" }}>
+                Use suggestion
+              </button>
+              <button onClick={() => { if (!goalInputs[currentCatId]?.trim()) setGoalInputs(g => ({ ...g, [currentCatId]: SUGGESTED_GOALS[currentCatId] })); handleGoalNext(); }}
+                style={{ flex:2,background:"#FFD700",color:"#000",border:"none",borderRadius:9,padding:"12px",fontSize:15,fontFamily:"Georgia,serif",fontWeight:700,cursor:"pointer" }}>
+                {currentGoalIdx < picked.length-1 ? "Next \u2192" : "Done \u2014 Let\u2019s go \u2192"}
+              </button>
+            </div>
+          </div>
+          {currentGoalIdx > 0 && (
+            <button onClick={() => setCurrentGoalIdx(i => i-1)} style={{ background:"none",border:"none",color:"#555",cursor:"pointer",fontSize:13,fontFamily:"Georgia,serif",marginTop:16,display:"block" }}>\u2190 Back</button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── COACH ───────────────────────────────────────────────────────────────────
 function Coach({ userName, goals, scores, logs, lifeVision, currentPage }) {
   const [open, setOpen] = useState(false);
@@ -620,16 +757,30 @@ function Coach({ userName, goals, scores, logs, lifeVision, currentPage }) {
   useEffect(() => {
     if (!open || msgs.length > 0) return;
     const completedGoals = Object.keys(goals).filter(k => goals[k]?.goal?.trim());
-    const pageCtx = {
-      vision: "I see you've been working on your Life Vision — ask me anything about it.",
-      checkin: "You're doing your daily check-in — great habit.",
-      dailycheckin: "You're reviewing all your goals today — I'm here to help.",
-      progress: "You're reviewing your progress — I can help you interpret it.",
-      dashboard: "How can I help you stay focused today?",
-    }[currentPage] || "How can I help?";
-    const greeting = completedGoals.length === 0
-      ? `Hey ${userName || "there"}, I'm Coach. Start by setting a goal in any life area and I'll help you think it through.`
-      : `Hey ${userName || "there"}, I'm Coach — I know all ${completedGoals.length} of your goals. ${pageCtx}`;
+    let greeting = "";
+    if (completedGoals.length === 0) {
+      greeting = `Hey ${userName || "there"}, I'm Coach. Start by setting a goal in any life area and I'll help you think it through.`;
+    } else {
+      const allLogs = completedGoals.flatMap(id => (logs[parseInt(id)] || []).map(l => ({ ...l, catId: parseInt(id) })));
+      const recentLogs = allLogs.sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5);
+      const lastLogDays = recentLogs.length ? daysSince(recentLogs[0].date) : null;
+      const streaks = completedGoals.map(id => ({ id, streak: getStreak(logs[parseInt(id)] || []) }));
+      const bestStreak = streaks.sort((a, b) => b.streak - a.streak)[0];
+      const coldGoals = completedGoals.filter(id => { const ls = logs[parseInt(id)] || []; return ls.length === 0 || daysSince(ls[ls.length-1]?.date) > 3; });
+      if (lastLogDays === 0) {
+        const last = recentLogs[0];
+        const c = cat(last.catId);
+        greeting = `Hey ${userName} — you checked in on ${c?.name} today. ${last.delta >= 0 ? `+${last.delta} pts.` : `${last.delta} pts.`} ${coldGoals.length > 0 ? `${cat(parseInt(coldGoals[0]))?.name} hasn\'t been touched in a while though. Want to talk about it?` : "What else is on your mind?"}`;
+      } else if (bestStreak && bestStreak.streak >= 3) {
+        const c = cat(parseInt(bestStreak.id));
+        greeting = `Hey ${userName} — you\'re on a ${bestStreak.streak}-day streak on ${c?.name}. That\'s real momentum. ${coldGoals.length > 0 ? `But ${cat(parseInt(coldGoals[0]))?.name} needs attention.` : "How can I help today?"}`;
+      } else if (coldGoals.length > 0) {
+        const c = cat(parseInt(coldGoals[0]));
+        greeting = `Hey ${userName} — ${c?.name} hasn\'t had a check-in in a while. I\'m not judging, but I notice. What\'s been going on there?`;
+      } else {
+        greeting = `Hey ${userName}, I know all ${completedGoals.length} of your goals. What do you want to work through today?`;
+      }
+    }
     setMsgs([{ role: "assistant", content: greeting }]);
   }, [open]);
 
@@ -749,24 +900,24 @@ function Nav({ tab, setTab, hasGoals, userName }) {
   );
 }
 
-// ─── MAIN APP ────────────────────────────────────────────────────────────────
+
+// ─── MAIN APP ─────────────────────────────────────────────────────────────────
 export default function App() {
-  const [loaded, setLoaded]           = useState(false);
-  const [screen, setScreen]           = useState("landing"); // landing | app
-  const [tab, setTab]                 = useState("setup");
-  const [activeId, setActiveId]       = useState(null);
-  const [userName, setUserName]       = useState("");
-  const [goals, setGoals]             = useState({});
-  const [scores, setScores]           = useState({});
-  const [logs, setLogs]               = useState({});
-  const [chats, setChats]             = useState({});
-  const [vision, setVision]           = useState("");
-  const [editGoal, setEditGoal]       = useState({ goal: "", metrics: "" });
-  const [ciNote, setCiNote]           = useState("");
-  const [ciMood, setCiMood]           = useState(3);
-  const [ciLoading, setCiLoading]     = useState(false);
-  const [ciFeedback, setCiFeedback]   = useState({});
-  const [chatInput, setChatInput]     = useState("");
+  const [loaded, setLoaded]         = useState(false);
+  const [screen, setScreen]         = useState("landing");
+  const [tab, setTab]               = useState("setup");
+  const [activeId, setActiveId]     = useState(null);
+  const [userName, setUserName]     = useState("");
+  const [goals, setGoals]           = useState({});
+  const [scores, setScores]         = useState({});
+  const [logs, setLogs]             = useState({});
+  const [chats, setChats]           = useState({});
+  const [vision, setVision]         = useState("");
+  const [editGoal, setEditGoal]     = useState({ goal: "", metrics: "" });
+  const [ciLoading, setCiLoading]   = useState(false);
+  const [ciFeedback, setCiFeedback] = useState({});
+  const [prevScores, setPrevScores] = useState({});
+  const [chatInput, setChatInput]   = useState("");
   const [chatLoading, setChatLoading] = useState(false);
   const [visionLoading, setVisionLoading] = useState(false);
   const [dailyActive, setDailyActive] = useState(null);
@@ -776,28 +927,20 @@ export default function App() {
     (async () => {
       const d = await store.get("soo3");
       if (d) {
-        setUserName(d.userName || "");
-        setGoals(d.goals || {}); setScores(d.scores || {});
-        setLogs(d.logs || {}); setChats(d.chats || {});
-        setVision(d.vision || "");
-        if (d.userName) {
-          setScreen("app");
-          setTab(Object.keys(d.goals || {}).length ? "dashboard" : "setup");
-        }
+        setUserName(d.userName || ""); setGoals(d.goals || {}); setScores(d.scores || {});
+        setLogs(d.logs || {}); setChats(d.chats || {}); setVision(d.vision || "");
+        if (d.userName) { setScreen("app"); setTab(Object.keys(d.goals || {}).length ? "dashboard" : "setup"); }
       }
       setLoaded(true);
     })();
   }, []);
 
-  const save = (patch = {}) => {
-    store.set("soo3", { userName, goals, scores, logs, chats, vision, ...patch });
-  };
-
-  const handleEnter = (name) => {
-    setUserName(name);
-    setScreen("app");
-    setTab("setup");
-    save({ userName: name });
+  const save = (patch = {}) => store.set("soo3", { userName, goals, scores, logs, chats, vision, ...patch });
+  const handleEnter = (name) => { setUserName(name); setScreen("onboarding"); save({ userName: name }); };
+  const handleOnboardComplete = (newGoals, newScores) => {
+    setGoals(newGoals); setScores(newScores); setScreen("app"); setTab("dailycheckin");
+    setDailyActive(Object.keys(newGoals).map(Number)[0]);
+    save({ goals: newGoals, scores: newScores });
   };
 
   const doneIds = Object.keys(goals).filter(k => goals[k]?.goal?.trim()).map(Number);
@@ -810,29 +953,27 @@ export default function App() {
     const ns = { ...scores }; if (!ns[activeId]) ns[activeId] = 50;
     setGoals(ng); setScores(ns); save({ goals: ng, scores: ns }); setTab("setup");
   };
-
-  const removeGoal = () => {
-    const ng = { ...goals }; delete ng[activeId];
-    setGoals(ng); save({ goals: ng }); setTab("setup");
-  };
+  const removeGoal = () => { const ng = { ...goals }; delete ng[activeId]; setGoals(ng); save({ goals: ng }); setTab("setup"); };
 
   const submitCheckin = async (id, note, mood) => {
     const targetId = id || activeId;
     setCiLoading(true);
     const recent = (logs[targetId] || []).slice(-5).map(l => `${l.date}: ${l.note} (mood ${l.mood}/5)`).join("\n");
     const reply = await callClaude(
-      [{ role: "user", content: `Goal: ${goals[targetId]?.goal}\nRecent:\n${recent || "First check-in"}\n\nToday ${todayStr()}, mood ${mood}/5:\n${note}` }],
-      `You are an accountability coach. In 2-3 sentences: acknowledge what they did, assess if it moved them toward or away from their goal, give one sharp insight. End with exactly: DELTA:+8 or DELTA:-5 (range -20 to +20). Nothing after.`
+      [{ role: "user", content: `Goal: ${goals[targetId]?.goal}\nRecent history:\n${recent || "First check-in"}\n\nToday ${todayStr()}, mood ${mood}/5:\n${note}` }],
+      `You are an accountability coach. In 2-3 sentences: acknowledge what they did, assess if it moved them toward or away from their goal, give one sharp insight. Reference their history if relevant. End with exactly: DELTA:+8 or DELTA:-5 (range -20 to +20). Nothing after.`
     );
     const match = reply.match(/DELTA:([+-]?\d+)/);
     const delta = match ? parseInt(match[1]) : 0;
     const clean = reply.replace(/DELTA:[+-]?\d+/, "").trim();
-    const newScore = Math.max(0, Math.min(100, sc(targetId) + delta));
+    const oldScore = sc(targetId);
+    const newScore = Math.max(0, Math.min(100, oldScore + delta));
     const entry = { date: todayStr(), note, mood, delta, aiReply: clean };
     const nl = { ...logs, [targetId]: [...(logs[targetId] || []), entry] };
     const ns = { ...scores, [targetId]: newScore };
+    setPrevScores(p => ({ ...p, [targetId]: oldScore }));
     setLogs(nl); setScores(ns);
-    setCiFeedback(prev => ({ ...prev, [targetId]: `${clean}\n\n${delta >= 0 ? "+" : ""}${delta} pts → ${newScore}/100` }));
+    setCiFeedback(prev => ({ ...prev, [targetId]: { text: clean, delta, newScore, oldScore } }));
     setCiLoading(false);
     save({ logs: nl, scores: ns });
   };
@@ -845,10 +986,7 @@ export default function App() {
     const updated = [...prev, msg];
     setChats(h => ({ ...h, [activeId]: updated }));
     setChatInput(""); setChatLoading(true);
-    const reply = await callClaude(
-      updated.map(m => ({ role: m.role, content: m.content })),
-      `You are a focused coach for ${userName}'s goal in ${c?.name}: "${goals[activeId]?.goal}". Score: ${sc(activeId)}/100. Be specific and direct.`
-    );
+    const reply = await callClaude(updated.map(m => ({ role: m.role, content: m.content })), `You are a focused coach for ${userName}'s goal in ${c?.name}: "${goals[activeId]?.goal}". Score: ${sc(activeId)}/100. Be specific and direct.`);
     const nc = { ...chats, [activeId]: [...updated, { role: "assistant", content: reply }] };
     setChats(nc); setChatLoading(false); save({ chats: nc });
     setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
@@ -857,23 +995,21 @@ export default function App() {
   const generateVision = async () => {
     setVisionLoading(true);
     const goalsText = doneIds.map(id => `${cat(id)?.name} (score ${sc(id)}/100, ${(logs[id]||[]).length} check-ins): ${goals[id].goal}`).join("\n");
-    const reply = await callClaude(
-      [{ role: "user", content: `Name: ${userName}\nGoals:\n${goalsText}\n\nWrite their Life Vision.` }],
-      `You are a master life architect. Create a profound personal Life Vision manifesto in second person. Inspired by Paul Graham: greatness compounds. Structure: opening identity, key themes, ONE core thread, 90-day challenge, closing commitment. Bold, specific, poetic.`
-    );
+    const reply = await callClaude([{ role: "user", content: `Name: ${userName}\nGoals:\n${goalsText}\n\nWrite their Life Vision.` }], `You are a master life architect. Create a profound personal Life Vision manifesto in second person. Inspired by Paul Graham: greatness compounds. Structure: opening identity, key themes, ONE core thread, 90-day challenge, closing commitment. Bold, specific, poetic.`);
     setVision(reply); setVisionLoading(false); save({ vision: reply });
   };
 
   if (!loaded) return (
-    <div style={{ minHeight: "100vh", background: "#080808", display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <div style={{ width: 36, height: 36, border: "2px solid rgba(255,215,0,0.2)", borderTop: "2px solid #FFD700", borderRadius: "50%", animation: "sooSpin 1s linear infinite" }} />
+    <div style={{ minHeight:"100vh",background:"#080808",display:"flex",alignItems:"center",justifyContent:"center" }}>
+      <div style={{ width:36,height:36,border:"2px solid rgba(255,215,0,0.2)",borderTop:"2px solid #FFD700",borderRadius:"50%",animation:"sooSpin 1s linear infinite" }} />
       <style>{`@keyframes sooSpin{to{transform:rotate(360deg)}}`}</style>
     </div>
   );
 
   if (screen === "landing") return <LandingPage onEnter={handleEnter} />;
+  if (screen === "onboarding") return <Onboarding userName={userName} onComplete={handleOnboardComplete} />;
 
-  // ── DAILY CHECK-IN PAGE ──────────────────────────────────────────────────
+  // ── DAILY CHECK-IN ──────────────────────────────────────────────────────────
   const DailyCheckin = () => {
     const [notes, setNotes] = useState({});
     const [moods, setMoods] = useState({});
@@ -882,154 +1018,145 @@ export default function App() {
     const current = dailyActive || (pending.length > 0 ? pending[0] : null);
 
     if (doneIds.length === 0) return (
-      <div style={{ padding: "80px 26px", textAlign: "center" }}>
-        <div style={{ fontSize: 40, marginBottom: 16 }}>◎</div>
-        <h2 style={{ fontSize: 22, fontWeight: 400, color: "#fff", margin: "0 0 10px" }}>No goals set yet</h2>
-        <p style={{ color: "#666", fontSize: 15, margin: "0 0 24px" }}>Set at least one goal to start your daily check-in.</p>
-        <button onClick={() => setTab("setup")} style={{ background: "#FFD700", color: "#000", border: "none", borderRadius: 9, padding: "12px 24px", fontSize: 15, fontFamily: "Georgia,serif", fontWeight: 700, cursor: "pointer" }}>Set Goals →</button>
+      <div style={{ padding:"80px 26px",textAlign:"center" }}>
+        <div style={{ fontSize:40,marginBottom:16 }}>◎</div>
+        <h2 style={{ fontSize:22,fontWeight:400,color:"#fff",margin:"0 0 10px" }}>No goals set yet</h2>
+        <p style={{ color:"#666",fontSize:15,margin:"0 0 8px" }}>Set at least one goal to start your daily check-in.</p>
+        <p style={{ color:"#555",fontSize:13,margin:"0 0 24px" }}>Go to Goals in the nav, pick a life area, and write your one goal for it.</p>
+        <button onClick={() => setTab("setup")} style={{ background:"#FFD700",color:"#000",border:"none",borderRadius:9,padding:"12px 24px",fontSize:15,fontFamily:"Georgia,serif",fontWeight:700,cursor:"pointer" }}>Set Goals &rarr;</button>
       </div>
     );
 
     return (
-      <div style={{ padding: "34px 26px", maxWidth: 1100, margin: "0 auto" }}>
-        <div style={{ marginBottom: 30 }}>
-          <h2 style={{ fontSize: 26, fontWeight: 400, color: "#fff", margin: "0 0 6px" }}>Daily Check-in · {todayStr()}</h2>
-          <p style={{ color: "#666", fontSize: 14, margin: 0 }}>{pending.length} remaining · {done.length} completed today</p>
+      <div style={{ padding:"34px 26px",maxWidth:1100,margin:"0 auto" }}>
+        <div style={{ marginBottom:30 }}>
+          <h2 style={{ fontSize:26,fontWeight:400,color:"#fff",margin:"0 0 6px" }}>Daily Check-in &middot; {todayStr()}</h2>
+          <p style={{ color:"#666",fontSize:14,margin:0 }}>{pending.length} remaining &middot; {done.length} completed today</p>
         </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "260px 1fr", gap: 24 }}>
-          {/* Sidebar — all goals */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <div style={{ fontSize: 11, color: "#555", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 6 }}>Your Goals</div>
+        <div style={{ display:"grid",gridTemplateColumns:"260px 1fr",gap:24 }}>
+          <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
+            <div style={{ fontSize:11,color:"#555",letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:6 }}>Your Goals</div>
             {doneIds.map(id => {
               const c = cat(id);
               const logged = todayLogged(id);
               const isActive = current === id;
+              const streak = getStreak(logs[id] || []);
               return (
                 <div key={id} onClick={() => setDailyActive(id)}
-                  style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderRadius: 10, cursor: "pointer", background: isActive ? `rgba(${hexRgb(c?.color||"#FFD700")},0.1)` : "rgba(255,255,255,0.02)", border: `1px solid ${isActive ? c?.color+"55" : "rgba(255,255,255,0.06)"}`, transition: "all 0.15s" }}>
-                  <span style={{ color: c?.color, fontSize: 16 }}>{c?.icon}</span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13, color: isActive ? "#fff" : "#aaa" }}>{c?.name}</div>
-                    <div style={{ fontSize: 11, color: "#555" }}>{sc(id)}/100</div>
+                  style={{ display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderRadius:10,cursor:"pointer",background:isActive?`rgba(${hexRgb(c?.color||"#FFD700")},0.1)`:"rgba(255,255,255,0.02)",border:`1px solid ${isActive?c?.color+"55":"rgba(255,255,255,0.06)"}`,transition:"all 0.15s" }}>
+                  <span style={{ color:c?.color,fontSize:16 }}>{c?.icon}</span>
+                  <div style={{ flex:1,minWidth:0 }}>
+                    <div style={{ fontSize:13,color:isActive?"#fff":"#aaa" }}>{c?.name}</div>
+                    <div style={{ fontSize:11,color:"#555",display:"flex",gap:6 }}>
+                      <span>{sc(id)}/100</span>
+                      {streak > 0 && <span style={{ color:"#FF9500" }}>&#128293;{streak}</span>}
+                    </div>
                   </div>
                   {logged
-                    ? <span style={{ fontSize: 14, color: "#7CE8A0" }}>✓</span>
-                    : <span style={{ fontSize: 10, color: "#E8D07C", background: "rgba(232,208,124,0.1)", border: "1px solid rgba(232,208,124,0.2)", borderRadius: 10, padding: "2px 7px" }}>due</span>
-                  }
+                    ? <span style={{ fontSize:14,color:"#7CE8A0" }}>&#10003;</span>
+                    : <span style={{ fontSize:10,color:"#E8D07C",background:"rgba(232,208,124,0.1)",border:"1px solid rgba(232,208,124,0.2)",borderRadius:10,padding:"2px 7px" }}>due</span>}
                 </div>
               );
             })}
             {done.length === doneIds.length && (
-              <div style={{ marginTop: 12, padding: "14px", background: "rgba(124,232,160,0.08)", border: "1px solid rgba(124,232,160,0.2)", borderRadius: 10, textAlign: "center" }}>
-                <div style={{ fontSize: 18, marginBottom: 6 }}>🎉</div>
-                <div style={{ fontSize: 13, color: "#7CE8A0" }}>All done for today!</div>
-                <div style={{ fontSize: 11, color: "#555", marginTop: 4 }}>Come back tomorrow</div>
+              <div style={{ marginTop:12,padding:"14px",background:"rgba(124,232,160,0.08)",border:"1px solid rgba(124,232,160,0.2)",borderRadius:10,textAlign:"center" }}>
+                <div style={{ fontSize:18,marginBottom:6 }}>&#127881;</div>
+                <div style={{ fontSize:13,color:"#7CE8A0" }}>All done for today!</div>
+                <div style={{ fontSize:11,color:"#555",marginTop:4 }}>Come back tomorrow</div>
               </div>
             )}
           </div>
 
-          {/* Main area */}
           {current ? (() => {
             const c = cat(current);
             const logged = todayLogged(current);
             const feedback = ciFeedback[current];
             const note = notes[current] || "";
             const mood = moods[current] || 3;
-            const lastLogs = (logs[current] || []).slice(-3).reverse();
+            const allLogs = logs[current] || [];
+            const yesterday = allLogs.filter(l => l.date !== todayStr()).slice(-1)[0];
+            const streak = getStreak(allLogs);
 
             return (
-              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                {/* Header */}
-                <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "20px 24px", background: `rgba(${hexRgb(c?.color||"#FFD700")},0.06)`, border: `1px solid ${c?.color}33`, borderRadius: 16 }}>
-                  <span style={{ fontSize: 28, color: c?.color }}>{c?.icon}</span>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 17, color: c?.color }}>{c?.name}</div>
-                    <div style={{ fontSize: 13, color: "#777", marginTop: 2 }}>{goals[current]?.goal}</div>
+              <div style={{ display:"flex",flexDirection:"column",gap:16 }}>
+                <div style={{ display:"flex",alignItems:"center",gap:14,padding:"20px 24px",background:`rgba(${hexRgb(c?.color||"#FFD700")},0.06)`,border:`1px solid ${c?.color}33`,borderRadius:16 }}>
+                  <span style={{ fontSize:28,color:c?.color }}>{c?.icon}</span>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:17,color:c?.color }}>{c?.name}</div>
+                    <div style={{ fontSize:13,color:"#777",marginTop:2 }}>{goals[current]?.goal}</div>
+                    {streak > 0 && <div style={{ fontSize:12,color:"#FF9500",marginTop:4 }}>&#128293; {streak}-day streak</div>}
                   </div>
-                  <div style={{ position: "relative", width: 58, height: 58, flexShrink: 0 }}>
-                    <Ring pct={sc(current)} color={c?.color || "#FFD700"} size={58} stroke={5} />
-                    <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, color: c?.color }}>{sc(current)}</div>
-                  </div>
+                  <AnimatedRing pct={sc(current)} prevPct={prevScores[current]} color={c?.color||"#FFD700"} size={58} stroke={5} />
                 </div>
 
-                {/* Past logs snippet */}
-                {lastLogs.length > 0 && (
-                  <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 12, padding: "14px 18px" }}>
-                    <div style={{ fontSize: 11, color: "#555", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 10 }}>Recent History</div>
-                    {lastLogs.map((l, i) => (
-                      <div key={i} style={{ display: "flex", gap: 10, paddingBottom: 8, marginBottom: 8, borderBottom: i < lastLogs.length - 1 ? "1px solid rgba(255,255,255,0.05)" : "none" }}>
-                        <span style={{ fontSize: 12, color: "#555", minWidth: 70 }}>{l.date}</span>
-                        <span style={{ fontSize: 12, color: l.delta >= 0 ? "#7CE8A0" : "#E87C7C", minWidth: 30 }}>{l.delta >= 0 ? "+" : ""}{l.delta}</span>
-                        <span style={{ fontSize: 13, color: "#888", lineHeight: 1.4 }}>{l.note.slice(0, 80)}{l.note.length > 80 ? "..." : ""}</span>
-                      </div>
-                    ))}
+                {yesterday && !logged && !feedback && (
+                  <div style={{ background:"rgba(255,255,255,0.02)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:12,padding:"14px 18px" }}>
+                    <div style={{ fontSize:11,color:"#555",letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:8 }}>Yesterday you said</div>
+                    <div style={{ fontSize:13,color:"#aaa",lineHeight:1.6,fontStyle:"italic" }}>"{yesterday.note.slice(0,120)}{yesterday.note.length>120?"...":""}"</div>
+                    {yesterday.aiReply && <div style={{ fontSize:12,color:"#666",marginTop:8,paddingTop:8,borderTop:"1px solid rgba(255,255,255,0.06)" }}>Coach said: "{yesterday.aiReply.slice(0,100)}..."</div>}
                   </div>
                 )}
 
                 {logged && !feedback ? (
-                  <div style={{ padding: "30px", textAlign: "center", background: "rgba(124,232,160,0.05)", border: "1px solid rgba(124,232,160,0.2)", borderRadius: 14 }}>
-                    <div style={{ fontSize: 28, marginBottom: 10 }}>✓</div>
-                    <div style={{ fontSize: 15, color: "#7CE8A0" }}>Logged today</div>
-                    <div style={{ fontSize: 13, color: "#555", marginTop: 6 }}>
-                      {(logs[current]||[]).slice(-1)[0]?.aiReply?.slice(0, 120)}
-                    </div>
+                  <div style={{ padding:"30px",textAlign:"center",background:"rgba(124,232,160,0.05)",border:"1px solid rgba(124,232,160,0.2)",borderRadius:14 }}>
+                    <div style={{ fontSize:28,marginBottom:10 }}>&#10003;</div>
+                    <div style={{ fontSize:15,color:"#7CE8A0" }}>Logged today</div>
+                    <div style={{ fontSize:13,color:"#555",marginTop:6 }}>{allLogs.slice(-1)[0]?.aiReply?.slice(0,120)}</div>
                   </div>
                 ) : feedback ? (
-                  <div style={{ background: `rgba(${hexRgb(c?.color||"#FFD700")},0.06)`, border: `1px solid ${c?.color}33`, borderRadius: 14, padding: "22px 24px" }}>
-                    <div style={{ fontSize: 11, color: c?.color, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 12 }}>Coach Feedback</div>
-                    <p style={{ fontSize: 14, color: "#ddd", lineHeight: 1.7, whiteSpace: "pre-wrap", margin: "0 0 16px" }}>{feedback}</p>
-                    <Bar val={sc(current)} color={c?.color || "#FFD700"} />
+                  <div style={{ background:`rgba(${hexRgb(c?.color||"#FFD700")},0.06)`,border:`1px solid ${c?.color}33`,borderRadius:14,padding:"22px 24px" }}>
+                    <div style={{ fontSize:11,color:c?.color,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:12 }}>Coach Feedback</div>
+                    <p style={{ fontSize:14,color:"#ddd",lineHeight:1.7,whiteSpace:"pre-wrap",margin:"0 0 16px" }}>{feedback.text}</p>
+                    <div style={{ display:"flex",alignItems:"center",gap:12,marginBottom:14 }}>
+                      <span style={{ fontSize:13,color:feedback.delta>=0?"#7CE8A0":"#E87C7C",fontWeight:700 }}>{feedback.delta>=0?"+":""}{feedback.delta} pts</span>
+                      <span style={{ fontSize:13,color:"#555" }}>&rarr;</span>
+                      <AnimatedRing pct={feedback.newScore} prevPct={feedback.oldScore} color={c?.color||"#FFD700"} size={46} stroke={4} />
+                    </div>
+                    <Bar val={feedback.newScore} color={c?.color||"#FFD700"} />
                     {pending.filter(id => id !== current).length > 0 && (
-                      <button onClick={() => { setDailyActive(pending.filter(id => id !== current)[0]); setCiFeedback(p => ({ ...p, [current]: undefined })); setNotes(n => ({ ...n, [current]: "" })); setMoods(m => ({ ...m, [current]: 3 })); }}
-                        style={{ marginTop: 16, background: "#FFD700", color: "#000", border: "none", borderRadius: 8, padding: "10px 20px", fontSize: 13, fontFamily: "Georgia,serif", fontWeight: 700, cursor: "pointer" }}>
-                        Next Goal →
+                      <button onClick={() => { setDailyActive(pending.filter(id=>id!==current)[0]); setCiFeedback(p=>({...p,[current]:undefined})); setNotes(n=>({...n,[current]:""})); setMoods(m=>({...m,[current]:3})); }}
+                        style={{ marginTop:16,background:"#FFD700",color:"#000",border:"none",borderRadius:8,padding:"10px 20px",fontSize:13,fontFamily:"Georgia,serif",fontWeight:700,cursor:"pointer" }}>
+                        Next Goal &rarr;
                       </button>
                     )}
                   </div>
                 ) : (
                   <>
-                    {/* Mood */}
                     <div>
-                      <div style={{ fontSize: 11, color: "#666", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 10 }}>How are you feeling about this goal today?</div>
-                      <div style={{ display: "flex", gap: 8 }}>
-                        {["😔","😐","🙂","😊","🔥"].map((emoji, i) => (
+                      <div style={{ fontSize:11,color:"#666",letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:10 }}>How are you feeling about this goal today?</div>
+                      <div style={{ display:"flex",gap:8 }}>
+                        {["\uD83D\uDE14","\uD83D\uDE10","\uD83D\uDE42","\uD83D\uDE0A","\uD83D\uDD25"].map((emoji, i) => (
                           <button key={i} onClick={() => setMoods(m => ({ ...m, [current]: i+1 }))}
-                            style={{ flex: 1, border: `1px solid ${mood === i+1 ? (c?.color||"#FFD700") : "rgba(255,255,255,0.1)"}`, background: mood === i+1 ? `rgba(${hexRgb(c?.color||"#FFD700")},0.15)` : "rgba(255,255,255,0.04)", borderRadius: 8, padding: "10px 0", fontSize: 20, cursor: "pointer" }}>
+                            style={{ flex:1,border:`1px solid ${mood===i+1?(c?.color||"#FFD700"):"rgba(255,255,255,0.1)"}`,background:mood===i+1?`rgba(${hexRgb(c?.color||"#FFD700")},0.15)`:"rgba(255,255,255,0.04)",borderRadius:8,padding:"10px 0",fontSize:20,cursor:"pointer" }}>
                             {emoji}
                           </button>
                         ))}
                       </div>
                     </div>
-
-                    {/* Note */}
                     <div>
-                      <div style={{ fontSize: 11, color: "#666", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 10 }}>What happened toward this goal today?</div>
+                      <div style={{ fontSize:11,color:"#666",letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:10 }}>What happened toward this goal today?</div>
                       <textarea rows={4} value={note} onChange={e => setNotes(n => ({ ...n, [current]: e.target.value }))}
                         placeholder="Be specific. What did you do, skip, or decide? The more honest, the better the feedback."
-                        style={{ width: "100%", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10, padding: "13px 16px", fontSize: 14, color: "#fff", fontFamily: "Georgia,serif", outline: "none", resize: "vertical" }} />
+                        style={{ width:"100%",background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"13px 16px",fontSize:14,color:"#fff",fontFamily:"Georgia,serif",outline:"none",resize:"vertical" }} />
                     </div>
-
                     <button onClick={() => submitCheckin(current, note, mood)} disabled={!note.trim() || ciLoading}
-                      style={{ background: note.trim() ? "#FFD700" : "rgba(255,215,0,0.15)", color: note.trim() ? "#000" : "#666", border: "none", borderRadius: 10, padding: "14px", fontSize: 15, fontFamily: "Georgia,serif", fontWeight: 700, cursor: note.trim() ? "pointer" : "default" }}>
+                      style={{ background:note.trim()?"#FFD700":"rgba(255,215,0,0.15)",color:note.trim()?"#000":"#666",border:"none",borderRadius:10,padding:"14px",fontSize:15,fontFamily:"Georgia,serif",fontWeight:700,cursor:note.trim()?"pointer":"default" }}>
                       {ciLoading ? "Analyzing..." : "Log & Get AI Feedback"}
                     </button>
                   </>
                 )}
-
-                {/* Analyse with Coach CTA */}
-                <div style={{ padding: "16px 20px", background: "rgba(255,215,0,0.04)", border: "1px solid rgba(255,215,0,0.12)", borderRadius: 12, display: "flex", alignItems: "center", gap: 14 }}>
-                  <div style={{ fontSize: 22 }}>C</div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 14, color: "#ddd" }}>Want to go deeper?</div>
-                    <div style={{ fontSize: 12, color: "#666" }}>Open Coach in the bottom-right to analyse your {c?.name} journey, patterns, and next steps — like having a Whoop coach for your life.</div>
+                <div style={{ padding:"16px 20px",background:"rgba(255,215,0,0.04)",border:"1px solid rgba(255,215,0,0.12)",borderRadius:12,display:"flex",alignItems:"center",gap:14 }}>
+                  <div style={{ width:28,height:28,borderRadius:"50%",background:"linear-gradient(135deg,#FFD700,#FF9500)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,color:"#000",flexShrink:0 }}>C</div>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:14,color:"#ddd" }}>Want to go deeper?</div>
+                    <div style={{ fontSize:12,color:"#666" }}>Open Coach (bottom-right) to analyse your {c?.name} journey, patterns, and next steps.</div>
                   </div>
                 </div>
               </div>
             );
           })() : (
-            <div style={{ textAlign: "center", padding: "60px 20px", color: "#666" }}>
-              <div style={{ fontSize: 14 }}>Select a goal from the left to check in</div>
+            <div style={{ textAlign:"center",padding:"60px 20px",color:"#666" }}>
+              <div style={{ fontSize:14 }}>Select a goal from the left to check in</div>
             </div>
           )}
         </div>
@@ -1042,27 +1169,31 @@ export default function App() {
     if (tab === "goalEntry") {
       const c = cat(activeId);
       return (
-        <div style={{ display: "flex", justifyContent: "center", padding: "36px 20px" }}>
-          <div style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 18, padding: 34, maxWidth: 540, width: "100%", display: "flex", flexDirection: "column", gap: 16 }}>
-            <button onClick={() => setTab("setup")} style={{ background: "none", border: "none", color: "#666", cursor: "pointer", fontSize: 14, fontFamily: "Georgia,serif", padding: 0, textAlign: "left" }}>← Back</button>
-            <div style={{ fontSize: 32, color: c?.color }}>{c?.icon}</div>
-            <h2 style={{ fontSize: 24, fontWeight: 400, color: c?.color, margin: 0 }}>{c?.name}</h2>
-            <label style={{ fontSize: 11, color: "#666", letterSpacing: "0.1em", textTransform: "uppercase" }}>Your ONE long-term goal</label>
+        <div style={{ display:"flex",justifyContent:"center",padding:"36px 20px" }}>
+          <div style={{ background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.09)",borderRadius:18,padding:34,maxWidth:540,width:"100%",display:"flex",flexDirection:"column",gap:16 }}>
+            <button onClick={() => setTab("setup")} style={{ background:"none",border:"none",color:"#666",cursor:"pointer",fontSize:14,fontFamily:"Georgia,serif",padding:0,textAlign:"left" }}>&larr; Back</button>
+            <div style={{ fontSize:32,color:c?.color }}>{c?.icon}</div>
+            <h2 style={{ fontSize:24,fontWeight:400,color:c?.color,margin:0 }}>{c?.name}</h2>
+            {!goals[activeId] && SUGGESTED_GOALS[activeId] && (
+              <div style={{ background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:8,padding:"10px 14px",fontSize:13,color:"#666",fontStyle:"italic" }}>
+                Suggested: {SUGGESTED_GOALS[activeId]}
+                <button onClick={() => setEditGoal(g => ({ ...g, goal: SUGGESTED_GOALS[activeId] }))} style={{ display:"block",marginTop:6,background:"none",border:"none",color:"#FFD700",cursor:"pointer",fontSize:12,fontFamily:"Georgia,serif",padding:0 }}>Use this &rarr;</button>
+              </div>
+            )}
+            <label style={{ fontSize:11,color:"#666",letterSpacing:"0.1em",textTransform:"uppercase" }}>Your ONE long-term goal</label>
             <textarea rows={3} placeholder="Be specific. Vague goals create vague lives."
               value={editGoal.goal} onChange={e => setEditGoal(g => ({ ...g, goal: e.target.value }))} autoFocus
-              style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10, padding: "12px 15px", fontSize: 15, color: "#fff", fontFamily: "Georgia,serif", outline: "none", resize: "vertical", width: "100%" }} />
-            <label style={{ fontSize: 11, color: "#666", letterSpacing: "0.1em", textTransform: "uppercase" }}>How will you measure it? (optional)</label>
+              style={{ background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"12px 15px",fontSize:15,color:"#fff",fontFamily:"Georgia,serif",outline:"none",resize:"vertical",width:"100%" }} />
+            <label style={{ fontSize:11,color:"#666",letterSpacing:"0.1em",textTransform:"uppercase" }}>How will you measure it? (optional)</label>
             <input placeholder="e.g. workout 5x/week, body fat %, revenue..."
               value={editGoal.metrics} onChange={e => setEditGoal(g => ({ ...g, metrics: e.target.value }))}
-              style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10, padding: "12px 15px", fontSize: 15, color: "#fff", fontFamily: "Georgia,serif", outline: "none" }} />
-            <div style={{ display: "flex", gap: 10 }}>
+              style={{ background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"12px 15px",fontSize:15,color:"#fff",fontFamily:"Georgia,serif",outline:"none" }} />
+            <div style={{ display:"flex",gap:10 }}>
               <button onClick={saveGoal} disabled={!editGoal.goal.trim()}
-                style={{ flex: 1, background: editGoal.goal.trim() ? "#FFD700" : "rgba(255,215,0,0.15)", color: editGoal.goal.trim() ? "#000" : "#666", border: "none", borderRadius: 9, padding: "12px", fontSize: 15, fontFamily: "Georgia,serif", fontWeight: 700, cursor: editGoal.goal.trim() ? "pointer" : "default" }}>
+                style={{ flex:1,background:editGoal.goal.trim()?"#FFD700":"rgba(255,215,0,0.15)",color:editGoal.goal.trim()?"#000":"#666",border:"none",borderRadius:9,padding:"12px",fontSize:15,fontFamily:"Georgia,serif",fontWeight:700,cursor:editGoal.goal.trim()?"pointer":"default" }}>
                 Save Goal
               </button>
-              {goals[activeId] && (
-                <button onClick={removeGoal} style={{ background: "none", border: "1px solid rgba(232,124,124,0.3)", borderRadius: 9, padding: "12px 16px", fontSize: 13, color: "#E87C7C", cursor: "pointer", fontFamily: "Georgia,serif" }}>Remove</button>
-              )}
+              {goals[activeId] && <button onClick={removeGoal} style={{ background:"none",border:"1px solid rgba(232,124,124,0.3)",borderRadius:9,padding:"12px 16px",fontSize:13,color:"#E87C7C",cursor:"pointer",fontFamily:"Georgia,serif" }}>Remove</button>}
             </div>
           </div>
         </div>
@@ -1070,31 +1201,33 @@ export default function App() {
     }
 
     if (tab === "setup") return (
-      <div style={{ padding: "34px 26px", maxWidth: 1000, margin: "0 auto" }}>
-        <h2 style={{ fontSize: 26, fontWeight: 400, color: "#fff", margin: "0 0 8px" }}>Your Life Goals</h2>
-        <p style={{ color: "#666", fontSize: 15, margin: "0 0 26px" }}>Define your ONE goal per life area. Each becomes a dedicated tracking and coaching space.</p>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(190px,1fr))", gap: 10 }}>
+      <div style={{ padding:"34px 26px",maxWidth:1000,margin:"0 auto" }}>
+        <h2 style={{ fontSize:26,fontWeight:400,color:"#fff",margin:"0 0 8px" }}>Your Life Goals</h2>
+        <p style={{ color:"#666",fontSize:15,margin:"0 0 26px" }}>One goal per life area. Click any area to set or edit your goal.</p>
+        <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(190px,1fr))",gap:10 }}>
           {CATS.map(c => {
             const has = !!goals[c.id]?.goal;
             const s = sc(c.id);
+            const streak = has ? getStreak(logs[c.id] || []) : 0;
             return (
               <div key={c.id} onClick={() => { setActiveId(c.id); setEditGoal({ goal: goals[c.id]?.goal || "", metrics: goals[c.id]?.metrics || "" }); setTab("goalEntry"); }}
-                style={{ background: "rgba(255,255,255,0.03)", border: `1px solid ${has ? c.color+"55" : "rgba(255,255,255,0.07)"}`, borderRadius: 12, padding: 16, cursor: "pointer", display: "flex", flexDirection: "column", gap: 6 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ color: c.color, fontSize: 20 }}>{c.icon}</span>
-                  {has && <span style={{ fontSize: 12, color: c.color, fontWeight: 700 }}>{s}/100</span>}
+                style={{ background:"rgba(255,255,255,0.03)",border:`1px solid ${has?c.color+"55":"rgba(255,255,255,0.07)"}`,borderRadius:12,padding:16,cursor:"pointer",display:"flex",flexDirection:"column",gap:6 }}>
+                <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center" }}>
+                  <span style={{ color:c.color,fontSize:20 }}>{c.icon}</span>
+                  <div style={{ display:"flex",gap:6,alignItems:"center" }}>
+                    {streak > 0 && <span style={{ fontSize:11,color:"#FF9500" }}>&#128293;{streak}</span>}
+                    {has && <span style={{ fontSize:12,color:c.color,fontWeight:700 }}>{s}</span>}
+                  </div>
                 </div>
-                <div style={{ fontSize: 14, color: "#ddd" }}>{c.name}</div>
-                <div style={{ fontSize: 12, color: has ? "#888" : "#555", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{has ? goals[c.id].goal : "+ Set goal"}</div>
+                <div style={{ fontSize:14,color:"#ddd" }}>{c.name}</div>
+                <div style={{ fontSize:12,color:has?"#888":"#555",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{has?goals[c.id].goal:"+ Set goal"}</div>
                 {has && <Bar val={s} color={c.color} />}
               </div>
             );
           })}
         </div>
         {doneIds.length > 0 && (
-          <button onClick={() => setTab("dashboard")} style={{ marginTop: 24, background: "#FFD700", color: "#000", border: "none", borderRadius: 9, padding: "12px 28px", fontSize: 15, fontFamily: "Georgia,serif", fontWeight: 700, cursor: "pointer" }}>
-            Go to Dashboard →
-          </button>
+          <button onClick={() => setTab("dashboard")} style={{ marginTop:24,background:"#FFD700",color:"#000",border:"none",borderRadius:9,padding:"12px 28px",fontSize:15,fontFamily:"Georgia,serif",fontWeight:700,cursor:"pointer" }}>Go to Dashboard &rarr;</button>
         )}
       </div>
     );
@@ -1104,87 +1237,127 @@ export default function App() {
     if (tab === "dashboard") {
       const avg = doneIds.length ? Math.round(doneIds.reduce((a, id) => a + sc(id), 0) / doneIds.length) : 0;
       const needCheckin = doneIds.filter(id => !todayLogged(id));
+      const totalLogs = doneIds.reduce((a, id) => a + (logs[id]?.length || 0), 0);
+      const bestStreak = doneIds.length ? Math.max(...doneIds.map(id => getStreak(logs[id] || []))) : 0;
+      const allRecentLogs = doneIds.flatMap(id => (logs[id] || []).map(l => ({ ...l, catId: id }))).sort((a, b) => b.date.localeCompare(a.date));
+      const lastLogDate = allRecentLogs[0]?.date;
+      const daysSinceLast = lastLogDate ? daysSince(lastLogDate) : null;
+
+      let greetingMsg = "";
+      if (totalLogs === 0) {
+        greetingMsg = "You've set your goals. Now start your first check-in — two minutes, that's all it takes.";
+      } else if (daysSinceLast === 0) {
+        const last = allRecentLogs[0];
+        const c = cat(last.catId);
+        greetingMsg = `You checked in on ${c?.name} today. ${last.delta >= 0 ? `+${last.delta} pts.` : `${last.delta} pts.`} Keep going.`;
+      } else if (daysSinceLast === 1) {
+        greetingMsg = `Yesterday was your last check-in. ${needCheckin.length} goal${needCheckin.length !== 1 ? "s" : ""} waiting for today.`;
+      } else if (daysSinceLast && daysSinceLast > 1) {
+        greetingMsg = `You haven't checked in for ${daysSinceLast} days. That's okay. The streak starts again today.`;
+      } else {
+        greetingMsg = `${needCheckin.length} goal${needCheckin.length !== 1 ? "s" : ""} waiting for today's check-in.`;
+      }
+
       return (
-        <div style={{ padding: "34px 26px", maxWidth: 1100, margin: "0 auto" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 22, flexWrap: "wrap", gap: 12 }}>
-            <div>
-              <h2 style={{ fontSize: 28, fontWeight: 400, color: "#fff", margin: "0 0 6px" }}>Good {timeOfDay()}, {userName}.</h2>
-              <p style={{ color: "#666", fontSize: 15, margin: 0, fontStyle: "italic" }}>"{PGQ[new Date().getDay() % PGQ.length]}"</p>
-            </div>
-            <div style={{ textAlign: "right" }}>
-              <div style={{ fontSize: 12, color: "#555" }}>overall score</div>
-              <div style={{ fontSize: 38, color: "#FFD700", lineHeight: 1 }}>{avg}</div>
-              <div style={{ fontSize: 12, color: "#555" }}>{doneIds.length} goals</div>
+        <div style={{ padding:"34px 26px",maxWidth:1100,margin:"0 auto" }}>
+          <div style={{ background:"linear-gradient(135deg,rgba(255,215,0,0.06),rgba(255,150,0,0.03))",border:"1px solid rgba(255,215,0,0.15)",borderRadius:16,padding:"22px 26px",marginBottom:22 }}>
+            <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:16 }}>
+              <div>
+                <h2 style={{ fontSize:26,fontWeight:400,color:"#fff",margin:"0 0 8px" }}>Good {timeOfDay()}, {userName}.</h2>
+                <p style={{ color:"#aaa",fontSize:15,margin:0,lineHeight:1.6 }}>{greetingMsg}</p>
+                <p style={{ color:"#555",fontSize:13,margin:"6px 0 0",fontStyle:"italic" }}>"{PGQ[new Date().getDay() % PGQ.length]}"</p>
+              </div>
+              <div style={{ display:"flex",gap:20,flexShrink:0 }}>
+                <div style={{ textAlign:"center" }}><div style={{ fontSize:30,color:"#FFD700",lineHeight:1 }}>{avg}</div><div style={{ fontSize:11,color:"#555",marginTop:3 }}>overall</div></div>
+                <div style={{ textAlign:"center" }}><div style={{ fontSize:30,color:"#FF9500",lineHeight:1 }}>{bestStreak > 0 ? `&#128293;${bestStreak}` : "&#8212;"}</div><div style={{ fontSize:11,color:"#555",marginTop:3 }}>best streak</div></div>
+                <div style={{ textAlign:"center" }}><div style={{ fontSize:30,color:"#7CB9E8",lineHeight:1 }}>{totalLogs}</div><div style={{ fontSize:11,color:"#555",marginTop:3 }}>check-ins</div></div>
+              </div>
             </div>
           </div>
+
           {needCheckin.length > 0 && (
-            <div style={{ display: "flex", alignItems: "center", gap: 12, background: "rgba(255,215,0,0.07)", border: "1px solid rgba(255,215,0,0.2)", borderRadius: 10, padding: "12px 16px", marginBottom: 22 }}>
-              <span style={{ color: "#FFD700" }}>★</span>
-              <span style={{ fontSize: 14, color: "#ddd" }}>{needCheckin.length} goal{needCheckin.length > 1 ? "s" : ""} awaiting today's check-in</span>
+            <div style={{ display:"flex",alignItems:"center",gap:12,background:"rgba(255,215,0,0.07)",border:"1px solid rgba(255,215,0,0.2)",borderRadius:10,padding:"12px 16px",marginBottom:22 }}>
+              <span style={{ color:"#FFD700" }}>&#9733;</span>
+              <span style={{ fontSize:14,color:"#ddd" }}>{needCheckin.length} goal{needCheckin.length > 1 ? "s" : ""} awaiting today's check-in</span>
               <button onClick={() => { setDailyActive(needCheckin[0]); setTab("dailycheckin"); }}
-                style={{ marginLeft: "auto", background: "rgba(255,215,0,0.15)", border: "1px solid rgba(255,215,0,0.3)", borderRadius: 7, padding: "6px 14px", fontSize: 13, color: "#FFD700", cursor: "pointer", fontFamily: "Georgia,serif" }}>
+                style={{ marginLeft:"auto",background:"rgba(255,215,0,0.15)",border:"1px solid rgba(255,215,0,0.3)",borderRadius:7,padding:"6px 14px",fontSize:13,color:"#FFD700",cursor:"pointer",fontFamily:"Georgia,serif" }}>
                 Start Daily Check-in
               </button>
             </div>
           )}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(285px,1fr))", gap: 15 }}>
+
+          <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(285px,1fr))",gap:15 }}>
             {doneIds.map(id => {
               const c = cat(id);
               const s = sc(id);
               const logList = logs[id] || [];
               const logged = todayLogged(id);
               const last7 = logList.slice(-7);
-              const trend = last7.length ? (last7[last7.length-1].delta > 0 ? "↑" : last7[last7.length-1].delta < 0 ? "↓" : "—") : "—";
+              const streak = getStreak(logList);
+              const trend = last7.length ? (last7[last7.length-1].delta > 0 ? "&#8593;" : last7[last7.length-1].delta < 0 ? "&#8595;" : "&#8212;") : "&#8212;";
               return (
-                <div key={id} style={{ background: "rgba(255,255,255,0.03)", border: `1px solid ${c?.color}33`, borderRadius: 16, padding: 20, display: "flex", flexDirection: "column", gap: 8 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <span style={{ color: c?.color, fontSize: 20 }}>{c?.icon}</span>
+                <div key={id} style={{ background:"rgba(255,255,255,0.03)",border:`1px solid ${c?.color}33`,borderRadius:16,padding:20,display:"flex",flexDirection:"column",gap:8 }}>
+                  <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center" }}>
+                    <div style={{ display:"flex",alignItems:"center",gap:10 }}>
+                      <span style={{ color:c?.color,fontSize:20 }}>{c?.icon}</span>
                       <div>
-                        <div style={{ fontSize: 13, color: c?.color }}>{c?.name}</div>
-                        <div style={{ fontSize: 11, color: "#555" }}>{logList.length} check-ins</div>
+                        <div style={{ fontSize:13,color:c?.color }}>{c?.name}</div>
+                        <div style={{ fontSize:11,color:"#555",display:"flex",gap:6 }}>
+                          <span>{logList.length} check-ins</span>
+                          {streak > 0 && <span style={{ color:streak>=7?"#FF6500":"#FF9500" }}>&#128293; {streak}d</span>}
+                        </div>
                       </div>
                     </div>
-                    <div style={{ position: "relative", width: 50, height: 50, flexShrink: 0 }}>
-                      <Ring pct={s} color={c?.color || "#FFD700"} size={50} stroke={4} />
-                      <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: "#888" }}>{s}</div>
-                    </div>
+                    <AnimatedRing pct={s} prevPct={prevScores[id]} color={c?.color||"#FFD700"} size={50} stroke={4} />
                   </div>
-                  <p style={{ fontSize: 13, color: "#999", lineHeight: 1.5, margin: 0 }}>{goals[id].goal}</p>
+                  <p style={{ fontSize:13,color:"#999",lineHeight:1.5,margin:0 }}>{goals[id].goal}</p>
                   {last7.length > 0 && (
-                    <div style={{ display: "flex", gap: 3, alignItems: "flex-end", height: 22 }}>
-                      {last7.map((l, i) => (
-                        <div key={i} style={{ flex: 1, minHeight: 3, height: `${Math.max(12,Math.abs(l.delta)/20*100)}%`, background: l.delta >= 0 ? (c?.color||"#FFD700")+"88" : "#E87C7C88", borderRadius: 2 }} />
-                      ))}
+                    <div style={{ display:"flex",gap:3,alignItems:"flex-end",height:22 }}>
+                      {last7.map((l, i) => <div key={i} style={{ flex:1,minHeight:3,height:`${Math.max(12,Math.abs(l.delta)/20*100)}%`,background:l.delta>=0?(c?.color||"#FFD700")+"88":"#E87C7C88",borderRadius:2 }} />)}
                     </div>
                   )}
-                  <div style={{ display: "flex", gap: 7 }}>
+                  <div style={{ display:"flex",gap:7 }}>
                     {!logged
                       ? <button onClick={() => { setDailyActive(id); setTab("dailycheckin"); }}
-                          style={{ flex: 1, background: `rgba(${hexRgb(c?.color||"#FFD700")},0.1)`, border: `1px solid ${c?.color}44`, borderRadius: 7, padding: "6px", fontSize: 12, color: c?.color, cursor: "pointer", fontFamily: "Georgia,serif" }}>
+                          style={{ flex:1,background:`rgba(${hexRgb(c?.color||"#FFD700")},0.1)`,border:`1px solid ${c?.color}44`,borderRadius:7,padding:"6px",fontSize:12,color:c?.color,cursor:"pointer",fontFamily:"Georgia,serif" }}>
                           + Check in today
                         </button>
-                      : <span style={{ fontSize: 12, color: (c?.color||"#FFD700")+"aa", padding: "6px 0", flex: 1 }}>Logged {trend}</span>
+                      : <span style={{ fontSize:12,color:(c?.color||"#FFD700")+"aa",padding:"6px 0",flex:1 }}>&#10003; Logged</span>
                     }
-                    <button onClick={() => { setActiveId(id); setTab("chat"); }} style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 7, padding: "6px 10px", fontSize: 12, color: "#aaa", cursor: "pointer", fontFamily: "Georgia,serif" }}>Coach</button>
-                    <button onClick={() => { setActiveId(id); setTab("progress"); }} style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 7, padding: "6px 10px", fontSize: 12, color: "#aaa", cursor: "pointer", fontFamily: "Georgia,serif" }}>History</button>
+                    <button onClick={() => { setActiveId(id); setTab("chat"); }} style={{ background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:7,padding:"6px 10px",fontSize:12,color:"#aaa",cursor:"pointer",fontFamily:"Georgia,serif" }}>Coach</button>
+                    <button onClick={() => { setActiveId(id); setTab("progress"); }} style={{ background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:7,padding:"6px 10px",fontSize:12,color:"#aaa",cursor:"pointer",fontFamily:"Georgia,serif" }}>History</button>
                   </div>
                 </div>
               );
             })}
           </div>
-          {vision
-            ? <div onClick={() => setTab("vision")} style={{ marginTop: 26, display: "flex", alignItems: "center", gap: 14, background: "rgba(255,215,0,0.05)", border: "1px solid rgba(255,215,0,0.15)", borderRadius: 12, padding: "15px 20px", cursor: "pointer" }}>
-                <span style={{ fontSize: 20, color: "#FFD700" }}>★</span>
-                <div><div style={{ fontSize: 14, color: "#ddd" }}>Your Life Vision</div><div style={{ fontSize: 12, color: "#666" }}>Click to view or regenerate</div></div>
-                <span style={{ marginLeft: "auto", color: "#FFD700" }}>→</span>
+
+          {(() => {
+            const unlocked = totalLogs >= 3;
+            if (vision) return (
+              <div onClick={() => setTab("vision")} style={{ marginTop:26,display:"flex",alignItems:"center",gap:14,background:"rgba(255,215,0,0.05)",border:"1px solid rgba(255,215,0,0.15)",borderRadius:12,padding:"15px 20px",cursor:"pointer" }}>
+                <span style={{ fontSize:20,color:"#FFD700" }}>&#9733;</span>
+                <div><div style={{ fontSize:14,color:"#ddd" }}>Your Life Vision</div><div style={{ fontSize:12,color:"#666" }}>Click to view or regenerate</div></div>
+                <span style={{ marginLeft:"auto",color:"#FFD700" }}>&rarr;</span>
               </div>
-            : doneIds.length > 0
-              ? <button onClick={() => { setTab("vision"); generateVision(); }} style={{ marginTop: 26, background: "rgba(255,215,0,0.1)", border: "1px solid rgba(255,215,0,0.25)", borderRadius: 10, padding: "13px 26px", fontSize: 15, color: "#FFD700", cursor: "pointer", fontFamily: "Georgia,serif" }}>
-                  Generate Life Vision
-                </button>
-              : null
-          }
+            );
+            if (unlocked) return (
+              <div style={{ marginTop:26,display:"flex",alignItems:"center",gap:14,background:"rgba(255,215,0,0.06)",border:"1px solid rgba(255,215,0,0.2)",borderRadius:12,padding:"18px 22px" }}>
+                <div>
+                  <div style={{ fontSize:14,color:"#FFD700",marginBottom:4 }}>&#9733; Your Life Vision is ready</div>
+                  <div style={{ fontSize:13,color:"#666" }}>You've logged {totalLogs} check-ins. You've earned this.</div>
+                </div>
+                <button onClick={() => { setTab("vision"); generateVision(); }} style={{ marginLeft:"auto",background:"#FFD700",color:"#000",border:"none",borderRadius:8,padding:"10px 20px",fontSize:14,fontFamily:"Georgia,serif",fontWeight:700,cursor:"pointer",whiteSpace:"nowrap" }}>Generate &rarr;</button>
+              </div>
+            );
+            return (
+              <div style={{ marginTop:26,background:"rgba(255,255,255,0.02)",border:"1px dashed rgba(255,255,255,0.08)",borderRadius:12,padding:"18px 22px",display:"flex",alignItems:"center",gap:14 }}>
+                <span style={{ fontSize:18,color:"#444" }}>&#9733;</span>
+                <div><div style={{ fontSize:14,color:"#555" }}>Life Vision unlocks after 3 check-ins</div><div style={{ fontSize:12,color:"#444",marginTop:2 }}>{totalLogs}/3 check-ins done</div></div>
+                <div style={{ marginLeft:"auto",height:4,width:80,background:"rgba(255,255,255,0.06)",borderRadius:2,overflow:"hidden" }}><div style={{ height:"100%",width:`${Math.min(100,(totalLogs/3)*100)}%`,background:"#FFD700",borderRadius:2,transition:"width 0.6s ease" }} /></div>
+              </div>
+            );
+          })()}
         </div>
       );
     }
@@ -1196,47 +1369,64 @@ export default function App() {
       logList.forEach(l => { const m = l.date.slice(0,7); if (!byMonth[m]) byMonth[m] = []; byMonth[m].push(l); });
       const s = sc(activeId);
       if (!activeId) return (
-        <div style={{ padding: "60px 26px", textAlign: "center" }}>
-          <p style={{ color: "#666" }}>Select a goal from the dashboard to view progress.</p>
-          <button onClick={() => setTab("dashboard")} style={{ marginTop: 14, background: "rgba(255,215,0,0.1)", border: "1px solid rgba(255,215,0,0.2)", borderRadius: 8, padding: "10px 20px", fontSize: 14, color: "#FFD700", cursor: "pointer", fontFamily: "Georgia,serif" }}>Go to Dashboard</button>
+        <div style={{ padding:"60px 26px",textAlign:"center" }}>
+          <div style={{ fontSize:40,marginBottom:16,color:"#333" }}>&#9678;</div>
+          <h3 style={{ fontSize:18,fontWeight:400,color:"#555",margin:"0 0 10px" }}>No goal selected</h3>
+          <p style={{ color:"#444",fontSize:14,margin:"0 0 24px" }}>Go to your dashboard and click "History" on any goal to see its progress here.</p>
+          <button onClick={() => setTab("dashboard")} style={{ background:"rgba(255,215,0,0.1)",border:"1px solid rgba(255,215,0,0.2)",borderRadius:8,padding:"10px 20px",fontSize:14,color:"#FFD700",cursor:"pointer",fontFamily:"Georgia,serif" }}>Go to Dashboard</button>
         </div>
       );
+      const streak = getStreak(logList);
+      const thisWeekLogs = logList.filter(l => { const d = new Date(l.date); const now = new Date(); const weekAgo = new Date(now); weekAgo.setDate(weekAgo.getDate()-7); return d >= weekAgo; });
+      const weekNet = thisWeekLogs.reduce((a, l) => a + l.delta, 0);
       return (
-        <div style={{ padding: "34px 26px", maxWidth: 900, margin: "0 auto" }}>
-          <button onClick={() => setTab("dashboard")} style={{ background: "none", border: "none", color: "#666", cursor: "pointer", fontSize: 14, fontFamily: "Georgia,serif", padding: "0 0 18px", display: "block" }}>← Back to Dashboard</button>
-          <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 30 }}>
-            <span style={{ color: c?.color, fontSize: 28 }}>{c?.icon}</span>
-            <div><h2 style={{ fontSize: 24, fontWeight: 400, color: "#fff", margin: "0 0 4px" }}>{c?.name} Progress</h2><p style={{ color: "#888", fontSize: 13, margin: 0 }}>{goals[activeId]?.goal}</p></div>
-            <div style={{ marginLeft: "auto", position: "relative", width: 76, height: 76 }}>
-              <Ring pct={s} color={c?.color || "#FFD700"} size={76} stroke={6} />
-              <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, color: c?.color }}>{s}</div>
-            </div>
+        <div style={{ padding:"34px 26px",maxWidth:900,margin:"0 auto" }}>
+          <button onClick={() => setTab("dashboard")} style={{ background:"none",border:"none",color:"#666",cursor:"pointer",fontSize:14,fontFamily:"Georgia,serif",padding:"0 0 18px",display:"block" }}>&larr; Back to Dashboard</button>
+          <div style={{ display:"flex",alignItems:"center",gap:14,marginBottom:30 }}>
+            <span style={{ color:c?.color,fontSize:28 }}>{c?.icon}</span>
+            <div><h2 style={{ fontSize:24,fontWeight:400,color:"#fff",margin:"0 0 4px" }}>{c?.name} Progress</h2><p style={{ color:"#888",fontSize:13,margin:0 }}>{goals[activeId]?.goal}</p></div>
+            <AnimatedRing pct={s} prevPct={undefined} color={c?.color||"#FFD700"} size={76} stroke={6} />
           </div>
-          <div style={{ display: "flex", gap: 10, marginBottom: 26, flexWrap: "wrap" }}>
-            {[{l:"Total Logs",v:logList.length},{l:"This Month",v:(byMonth[monthStr()]||[]).length},{l:"Streak",v:`${getStreak(logList)}d`},{l:"Best",v:logList.length?`+${Math.max(...logList.map(l=>l.delta))}`:"--"},{l:"Avg Mood",v:logList.length?`${(logList.reduce((a,l)=>a+l.mood,0)/logList.length).toFixed(1)}/5`:"--"}].map(st => (
-              <div key={st.l} style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 12, padding: "14px 18px", flex: 1, minWidth: 80, textAlign: "center" }}>
-                <div style={{ fontSize: 22, color: c?.color }}>{st.v}</div>
-                <div style={{ fontSize: 11, color: "#666", marginTop: 4 }}>{st.l}</div>
+          {thisWeekLogs.length > 0 && (
+            <div style={{ background:"rgba(255,215,0,0.04)",border:"1px solid rgba(255,215,0,0.15)",borderRadius:14,padding:"18px 22px",marginBottom:22 }}>
+              <div style={{ fontSize:12,color:"#FFD700",letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:12 }}>This Week</div>
+              <div style={{ display:"flex",gap:24,flexWrap:"wrap" }}>
+                <div><div style={{ fontSize:20,color:weekNet>=0?"#7CE8A0":"#E87C7C" }}>{weekNet>=0?"+":""}{weekNet} pts</div><div style={{ fontSize:11,color:"#555" }}>net change</div></div>
+                <div><div style={{ fontSize:20,color:"#FFD700" }}>{thisWeekLogs.length}</div><div style={{ fontSize:11,color:"#555" }}>check-ins</div></div>
+                <div><div style={{ fontSize:20,color:"#FF9500" }}>{(thisWeekLogs.reduce((a,l)=>a+l.mood,0)/thisWeekLogs.length).toFixed(1)}/5</div><div style={{ fontSize:11,color:"#555" }}>avg mood</div></div>
+                {thisWeekLogs.length > 0 && <div style={{ flex:1,minWidth:160 }}><div style={{ fontSize:12,color:"#555",marginBottom:4 }}>Best entry this week</div><div style={{ fontSize:13,color:"#aaa",fontStyle:"italic" }}>"{thisWeekLogs.reduce((b,l)=>l.delta>b.delta?l:b,thisWeekLogs[0]).note.slice(0,80)}..."</div></div>}
+              </div>
+            </div>
+          )}
+          <div style={{ display:"flex",gap:10,marginBottom:26,flexWrap:"wrap" }}>
+            {[{l:"Total Logs",v:logList.length},{l:"This Month",v:(byMonth[monthStr()]||[]).length},{l:"Streak",v:`${streak}d`},{l:"Best",v:logList.length?`+${Math.max(...logList.map(l=>l.delta))}`:"--"},{l:"Avg Mood",v:logList.length?`${(logList.reduce((a,l)=>a+l.mood,0)/logList.length).toFixed(1)}/5`:"--"}].map(st => (
+              <div key={st.l} style={{ background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:12,padding:"14px 18px",flex:1,minWidth:80,textAlign:"center" }}>
+                <div style={{ fontSize:22,color:c?.color }}>{st.v}</div>
+                <div style={{ fontSize:11,color:"#666",marginTop:4 }}>{st.l}</div>
               </div>
             ))}
           </div>
-          {logList.length === 0 && <div style={{ color: "#555", fontSize: 15, textAlign: "center", padding: "60px 0" }}>No logs yet. Start your first check-in!</div>}
+          {logList.length === 0 && (
+            <div style={{ textAlign:"center",padding:"60px 0" }}>
+              <div style={{ fontSize:14,color:"#555",marginBottom:16 }}>No check-ins yet for this goal.</div>
+              <div style={{ fontSize:13,color:"#444",marginBottom:24 }}>30 days from now this page will tell your story. Start today.</div>
+              <button onClick={() => { setDailyActive(activeId); setTab("dailycheckin"); }} style={{ background:"#FFD700",color:"#000",border:"none",borderRadius:9,padding:"12px 24px",fontSize:14,fontFamily:"Georgia,serif",fontWeight:700,cursor:"pointer" }}>Start First Check-in &rarr;</button>
+            </div>
+          )}
           {Object.keys(byMonth).sort().reverse().map(m => (
-            <div key={m} style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 12, padding: 20, marginBottom: 12 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
-                <div style={{ fontSize: 14, color: c?.color }}>{formatMonth(m)}</div>
-                <div style={{ fontSize: 13, color: "#888" }}>{byMonth[m].length} logs · net {byMonth[m].reduce((a,l)=>a+l.delta,0)>=0?"+":""}{byMonth[m].reduce((a,l)=>a+l.delta,0)}</div>
+            <div key={m} style={{ background:"rgba(255,255,255,0.02)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:12,padding:20,marginBottom:12 }}>
+              <div style={{ display:"flex",justifyContent:"space-between",marginBottom:12 }}>
+                <div style={{ fontSize:14,color:c?.color }}>{formatMonth(m)}</div>
+                <div style={{ fontSize:13,color:"#888" }}>{byMonth[m].length} logs &middot; net {byMonth[m].reduce((a,l)=>a+l.delta,0)>=0?"+":""}{byMonth[m].reduce((a,l)=>a+l.delta,0)}</div>
               </div>
-              <div style={{ display: "flex", gap: 3, alignItems: "flex-end", height: 38, marginBottom: 12 }}>
-                {byMonth[m].map((l, i) => (
-                  <div key={i} style={{ flex: 1, minWidth: 4, height: `${Math.max(10,Math.abs(l.delta)/20*100)}%`, background: l.delta>=0?(c?.color||"#FFD700")+"99":"#E87C7C99", borderRadius: 2 }} />
-                ))}
+              <div style={{ display:"flex",gap:3,alignItems:"flex-end",height:38,marginBottom:12 }}>
+                {byMonth[m].map((l, i) => <div key={i} style={{ flex:1,minWidth:4,height:`${Math.max(10,Math.abs(l.delta)/20*100)}%`,background:l.delta>=0?(c?.color||"#FFD700")+"99":"#E87C7C99",borderRadius:2 }} />)}
               </div>
               {byMonth[m].slice().reverse().map((l, i) => (
-                <div key={i} style={{ display: "flex", gap: 10, paddingBottom: 8, marginBottom: 8, borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
-                  <span style={{ fontSize: 12, color: "#666", whiteSpace: "nowrap", minWidth: 48 }}>{l.date.slice(5)}</span>
-                  <span style={{ fontSize: 12, color: l.delta>=0?"#7CE8A0":"#E87C7C", whiteSpace: "nowrap" }}>{l.delta>=0?"+":""}{l.delta}</span>
-                  <span style={{ fontSize: 13, color: "#aaa", lineHeight: 1.5 }}>{l.note}</span>
+                <div key={i} style={{ display:"flex",gap:10,paddingBottom:8,marginBottom:8,borderBottom:"1px solid rgba(255,255,255,0.05)" }}>
+                  <span style={{ fontSize:12,color:"#666",whiteSpace:"nowrap",minWidth:48 }}>{l.date.slice(5)}</span>
+                  <span style={{ fontSize:12,color:l.delta>=0?"#7CE8A0":"#E87C7C",whiteSpace:"nowrap" }}>{l.delta>=0?"+":""}{l.delta}</span>
+                  <span style={{ fontSize:13,color:"#aaa",lineHeight:1.5 }}>{l.note}</span>
                 </div>
               ))}
             </div>
@@ -1249,64 +1439,53 @@ export default function App() {
       const c = cat(activeId);
       const msgs = chats[activeId] || [];
       if (!activeId) return (
-        <div style={{ padding: "60px 26px", textAlign: "center" }}>
-          <p style={{ color: "#666" }}>Select a goal from the dashboard to open its coach.</p>
-          <button onClick={() => setTab("dashboard")} style={{ marginTop: 14, background: "rgba(255,215,0,0.1)", border: "1px solid rgba(255,215,0,0.2)", borderRadius: 8, padding: "10px 20px", fontSize: 14, color: "#FFD700", cursor: "pointer", fontFamily: "Georgia,serif" }}>Go to Dashboard</button>
+        <div style={{ padding:"60px 26px",textAlign:"center" }}>
+          <div style={{ fontSize:40,marginBottom:16,color:"#333" }}>C</div>
+          <h3 style={{ fontSize:18,fontWeight:400,color:"#555",margin:"0 0 10px" }}>No goal selected</h3>
+          <p style={{ color:"#444",fontSize:14,margin:"0 0 24px" }}>Go to your dashboard and click "Coach" on any goal to open a dedicated coaching session.</p>
+          <button onClick={() => setTab("dashboard")} style={{ background:"rgba(255,215,0,0.1)",border:"1px solid rgba(255,215,0,0.2)",borderRadius:8,padding:"10px 20px",fontSize:14,color:"#FFD700",cursor:"pointer",fontFamily:"Georgia,serif" }}>Go to Dashboard</button>
         </div>
       );
       return (
-        <div style={{ display: "flex", height: "calc(100vh - 58px)" }}>
-          <div style={{ width: 240, borderRight: "1px solid rgba(255,255,255,0.07)", padding: 20, flexShrink: 0, overflowY: "auto" }}>
-            <button onClick={() => setTab("dashboard")} style={{ background: "none", border: "none", color: "#666", cursor: "pointer", fontSize: 14, fontFamily: "Georgia,serif", padding: "0 0 14px", display: "block" }}>← Back</button>
-            <div style={{ color: c?.color, fontSize: 24, marginBottom: 6 }}>{c?.icon}</div>
-            <div style={{ fontSize: 14, color: c?.color, marginBottom: 8 }}>{c?.name}</div>
-            <div style={{ fontSize: 12, color: "#777", lineHeight: 1.5, marginBottom: 14 }}>{goals[activeId]?.goal}</div>
-            <div style={{ position: "relative", width: 60, height: 60, marginBottom: 16 }}>
-              <Ring pct={sc(activeId)} color={c?.color || "#FFD700"} size={60} stroke={5} />
-              <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: c?.color }}>{sc(activeId)}</div>
-            </div>
-            <div style={{ fontSize: 11, color: "#555", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 10 }}>Other Goals</div>
+        <div style={{ display:"flex",height:"calc(100vh - 58px)" }}>
+          <div style={{ width:240,borderRight:"1px solid rgba(255,255,255,0.07)",padding:20,flexShrink:0,overflowY:"auto" }}>
+            <button onClick={() => setTab("dashboard")} style={{ background:"none",border:"none",color:"#666",cursor:"pointer",fontSize:14,fontFamily:"Georgia,serif",padding:"0 0 14px",display:"block" }}>&larr; Back</button>
+            <div style={{ color:c?.color,fontSize:24,marginBottom:6 }}>{c?.icon}</div>
+            <div style={{ fontSize:14,color:c?.color,marginBottom:8 }}>{c?.name}</div>
+            <div style={{ fontSize:12,color:"#777",lineHeight:1.5,marginBottom:14 }}>{goals[activeId]?.goal}</div>
+            <AnimatedRing pct={sc(activeId)} prevPct={undefined} color={c?.color||"#FFD700"} size={60} stroke={5} />
+            <div style={{ fontSize:11,color:"#555",letterSpacing:"0.1em",textTransform:"uppercase",margin:"18px 0 10px" }}>Other Goals</div>
             {doneIds.filter(id => id !== activeId).map(id => {
               const cc = cat(id);
-              return (
-                <div key={id} onClick={() => setActiveId(id)} style={{ display: "flex", gap: 8, alignItems: "center", padding: "7px 0", cursor: "pointer", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
-                  <span style={{ color: cc?.color }}>{cc?.icon}</span>
-                  <span style={{ fontSize: 12, color: "#888" }}>{cc?.name}</span>
-                </div>
-              );
+              return (<div key={id} onClick={() => setActiveId(id)} style={{ display:"flex",gap:8,alignItems:"center",padding:"7px 0",cursor:"pointer",borderBottom:"1px solid rgba(255,255,255,0.05)" }}><span style={{ color:cc?.color }}>{cc?.icon}</span><span style={{ fontSize:12,color:"#888" }}>{cc?.name}</span></div>);
             })}
           </div>
-          <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-            <div style={{ flex: 1, overflowY: "auto", padding: "26px 34px", display: "flex", flexDirection: "column", gap: 13 }}>
+          <div style={{ flex:1,display:"flex",flexDirection:"column" }}>
+            <div style={{ flex:1,overflowY:"auto",padding:"26px 34px",display:"flex",flexDirection:"column",gap:13 }}>
               {msgs.length === 0 && (
-                <div style={{ textAlign: "center", padding: "60px 20px", color: "#666" }}>
-                  <div style={{ fontSize: 38, color: c?.color, marginBottom: 10 }}>{c?.icon}</div>
-                  <div style={{ fontSize: 16, color: "#ddd", marginBottom: 8 }}>Coaching for {c?.name}</div>
-                  <div style={{ fontSize: 14, lineHeight: 1.6, maxWidth: 340, margin: "0 auto" }}>Ask anything. Explore your why. Remove what does not serve your one goal.</div>
+                <div style={{ textAlign:"center",padding:"60px 20px",color:"#666" }}>
+                  <div style={{ fontSize:38,color:c?.color,marginBottom:10 }}>{c?.icon}</div>
+                  <div style={{ fontSize:16,color:"#ddd",marginBottom:8 }}>Coaching for {c?.name}</div>
+                  <div style={{ fontSize:14,lineHeight:1.6,maxWidth:340,margin:"0 auto",color:"#666" }}>Ask anything. I know your goal, your score, and your history. Let's figure out what's actually going on.</div>
                 </div>
               )}
               {msgs.map((m, i) => (
-                <div key={i} style={{ display: "flex", justifyContent: m.role === "user" ? "flex-end" : "flex-start" }}>
-                  <div style={{ maxWidth: "70%", padding: "12px 16px", borderRadius: m.role === "user" ? "14px 14px 4px 14px" : "14px 14px 14px 4px", background: m.role === "user" ? `rgba(${hexRgb(c?.color||"#FFD700")},0.15)` : "rgba(255,255,255,0.05)", border: m.role === "user" ? `1px solid ${c?.color}44` : "1px solid rgba(255,255,255,0.08)", fontSize: 14, color: "#ddd", lineHeight: 1.7, whiteSpace: "pre-wrap" }}>
-                    <div style={{ fontSize: 11, color: m.role === "user" ? c?.color : "#555", marginBottom: 5 }}>{m.role === "user" ? "You" : "Coach"}</div>
+                <div key={i} style={{ display:"flex",justifyContent:m.role==="user"?"flex-end":"flex-start" }}>
+                  <div style={{ maxWidth:"70%",padding:"12px 16px",borderRadius:m.role==="user"?"14px 14px 4px 14px":"14px 14px 14px 4px",background:m.role==="user"?`rgba(${hexRgb(c?.color||"#FFD700")},0.15)`:"rgba(255,255,255,0.05)",border:m.role==="user"?`1px solid ${c?.color}44`:"1px solid rgba(255,255,255,0.08)",fontSize:14,color:"#ddd",lineHeight:1.7,whiteSpace:"pre-wrap" }}>
+                    <div style={{ fontSize:11,color:m.role==="user"?c?.color:"#555",marginBottom:5 }}>{m.role==="user"?"You":"Coach"}</div>
                     {m.content}
                   </div>
                 </div>
               ))}
-              {chatLoading && (
-                <div style={{ display: "flex" }}>
-                  <div style={{ padding: "12px 16px", background: "rgba(255,255,255,0.05)", borderRadius: "14px 14px 14px 4px", border: "1px solid rgba(255,255,255,0.08)", color: "#666", fontSize: 14 }}>thinking...</div>
-                </div>
-              )}
+              {chatLoading && <div style={{ display:"flex" }}><div style={{ padding:"12px 16px",background:"rgba(255,255,255,0.05)",borderRadius:"14px 14px 14px 4px",border:"1px solid rgba(255,255,255,0.08)",color:"#666",fontSize:14 }}>thinking...</div></div>}
               <div ref={chatEndRef} />
             </div>
-            <div style={{ padding: "13px 26px", borderTop: "1px solid rgba(255,255,255,0.07)", background: "rgba(0,0,0,0.3)", display: "flex", gap: 10 }}>
-              <input style={{ flex: 1, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 9, padding: "10px 14px", fontSize: 14, color: "#fff", fontFamily: "Georgia,serif", outline: "none" }}
+            <div style={{ padding:"13px 26px",borderTop:"1px solid rgba(255,255,255,0.07)",background:"rgba(0,0,0,0.3)",display:"flex",gap:10 }}>
+              <input style={{ flex:1,background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:9,padding:"10px 14px",fontSize:14,color:"#fff",fontFamily:"Georgia,serif",outline:"none" }}
                 placeholder={`Ask about your ${c?.name} goal...`}
-                value={chatInput} onChange={e => setChatInput(e.target.value)}
-                onKeyDown={e => e.key === "Enter" && sendGoalChat()} />
+                value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => e.key==="Enter" && sendGoalChat()} />
               <button onClick={sendGoalChat} disabled={!chatInput.trim() || chatLoading}
-                style={{ background: c?.color || "#FFD700", border: "none", borderRadius: 9, padding: "10px 18px", fontSize: 16, color: "#000", cursor: "pointer" }}>→</button>
+                style={{ background:c?.color||"#FFD700",border:"none",borderRadius:9,padding:"10px 18px",fontSize:16,color:"#000",cursor:"pointer" }}>&rarr;</button>
             </div>
           </div>
         </div>
@@ -1318,157 +1497,101 @@ export default function App() {
       const totalLogs = doneIds.reduce((a, id) => a + (logs[id]?.length || 0), 0);
       const topGoals = [...doneIds].sort((a,b) => sc(b) - sc(a));
       const needsWork = [...doneIds].sort((a,b) => sc(a) - sc(b)).slice(0, 3);
-
       const LifeWheel = () => {
         const size = 280, cx = 140, cy = 140, maxR = 110;
         const n = doneIds.length;
         if (n < 3) return null;
-        const pts = doneIds.map((id, i) => {
-          const angle = (i / n) * 2 * Math.PI - Math.PI / 2;
-          const r = (sc(id) / 100) * maxR;
-          return { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle), id };
-        });
-        const gridPts = (pct) => doneIds.map((_, i) => {
-          const angle = (i / n) * 2 * Math.PI - Math.PI / 2;
-          const r = (pct / 100) * maxR;
-          return `${cx + r * Math.cos(angle)},${cy + r * Math.sin(angle)}`;
-        }).join(" ");
+        const pts = doneIds.map((id, i) => { const angle = (i/n)*2*Math.PI - Math.PI/2; const r = (sc(id)/100)*maxR; return { x: cx+r*Math.cos(angle), y: cy+r*Math.sin(angle), id }; });
+        const gridPts = (pct) => doneIds.map((_,i) => { const angle = (i/n)*2*Math.PI - Math.PI/2; const r = (pct/100)*maxR; return `${cx+r*Math.cos(angle)},${cy+r*Math.sin(angle)}`; }).join(" ");
         const poly = pts.map(p => `${p.x},${p.y}`).join(" ");
         return (
-          <svg width={size} height={size} style={{ overflow: "visible" }}>
+          <svg width={size} height={size} style={{ overflow:"visible" }}>
             {[25,50,75,100].map(pct => <polygon key={pct} points={gridPts(pct)} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="1" />)}
-            {doneIds.map((id, i) => {
-              const angle = (i / n) * 2 * Math.PI - Math.PI / 2;
-              return <line key={id} x1={cx} y1={cy} x2={cx + maxR * Math.cos(angle)} y2={cy + maxR * Math.sin(angle)} stroke="rgba(255,255,255,0.07)" strokeWidth="1" />;
-            })}
+            {doneIds.map((id,i) => { const angle = (i/n)*2*Math.PI - Math.PI/2; return <line key={id} x1={cx} y1={cy} x2={cx+maxR*Math.cos(angle)} y2={cy+maxR*Math.sin(angle)} stroke="rgba(255,255,255,0.07)" strokeWidth="1" />; })}
             <polygon points={poly} fill="rgba(255,215,0,0.12)" stroke="#FFD700" strokeWidth="1.5" strokeLinejoin="round" />
-            {pts.map((p, i) => { const c = cat(p.id); return <circle key={i} cx={p.x} cy={p.y} r={4} fill={c?.color || "#FFD700"} stroke="#080808" strokeWidth="2" />; })}
-            {doneIds.map((id, i) => {
-              const angle = (i / n) * 2 * Math.PI - Math.PI / 2;
-              const lx = cx + (maxR + 22) * Math.cos(angle);
-              const ly = cy + (maxR + 22) * Math.sin(angle);
-              const c = cat(id);
-              return <g key={id}><text x={lx} y={ly - 4} textAnchor="middle" fill={c?.color || "#888"} fontSize="10" fontFamily="Georgia,serif">{c?.icon}</text><text x={lx} y={ly + 10} textAnchor="middle" fill="#666" fontSize="8" fontFamily="Georgia,serif">{sc(id)}</text></g>;
-            })}
-            <text x={cx} y={cy - 8} textAnchor="middle" fill="#FFD700" fontSize="22" fontFamily="Georgia,serif" fontWeight="bold">{avgScore}</text>
-            <text x={cx} y={cy + 10} textAnchor="middle" fill="#666" fontSize="9" fontFamily="Georgia,serif">overall</text>
+            {pts.map((p,i) => { const c = cat(p.id); return <circle key={i} cx={p.x} cy={p.y} r={4} fill={c?.color||"#FFD700"} stroke="#080808" strokeWidth="2" />; })}
+            {doneIds.map((id,i) => { const angle = (i/n)*2*Math.PI - Math.PI/2; const lx = cx+(maxR+22)*Math.cos(angle); const ly = cy+(maxR+22)*Math.sin(angle); const c = cat(id); return <g key={id}><text x={lx} y={ly-4} textAnchor="middle" fill={c?.color||"#888"} fontSize="10" fontFamily="Georgia,serif">{c?.icon}</text><text x={lx} y={ly+10} textAnchor="middle" fill="#666" fontSize="8" fontFamily="Georgia,serif">{sc(id)}</text></g>; })}
+            <text x={cx} y={cy-8} textAnchor="middle" fill="#FFD700" fontSize="22" fontFamily="Georgia,serif" fontWeight="bold">{avgScore}</text>
+            <text x={cx} y={cy+10} textAnchor="middle" fill="#666" fontSize="9" fontFamily="Georgia,serif">overall</text>
           </svg>
         );
       };
-
       return (
-        <div style={{ padding: "34px 26px", maxWidth: 960, margin: "0 auto" }}>
-          <div style={{ textAlign: "center", marginBottom: 40 }}>
-            <div style={{ fontSize: 46, color: "#FFD700" }}>★</div>
-            <h2 style={{ fontSize: 30, fontWeight: 400, color: "#fff", margin: "12px 0 8px" }}>{userName}'s Life Vision</h2>
-            <p style={{ color: "#666", fontSize: 14, margin: 0 }}>Synthesized from {doneIds.length} goals · {totalLogs} check-ins logged</p>
+        <div style={{ padding:"34px 26px",maxWidth:960,margin:"0 auto" }}>
+          <div style={{ textAlign:"center",marginBottom:40 }}>
+            <div style={{ fontSize:46,color:"#FFD700" }}>&#9733;</div>
+            <h2 style={{ fontSize:30,fontWeight:400,color:"#fff",margin:"12px 0 8px" }}>{userName}'s Life Vision</h2>
+            <p style={{ color:"#666",fontSize:14,margin:0 }}>Synthesized from {doneIds.length} goals &middot; {totalLogs} check-ins logged</p>
           </div>
           {visionLoading && (
-            <div style={{ textAlign: "center", padding: "60px 0" }}>
-              <div style={{ width: 34, height: 34, border: "2px solid rgba(255,215,0,0.2)", borderTop: "2px solid #FFD700", borderRadius: "50%", animation: "sooSpin 1s linear infinite", margin: "0 auto" }} />
-              <p style={{ color: "#888", marginTop: 18 }}>Weaving your life vision...</p>
+            <div style={{ textAlign:"center",padding:"60px 0" }}>
+              <div style={{ width:34,height:34,border:"2px solid rgba(255,215,0,0.2)",borderTop:"2px solid #FFD700",borderRadius:"50%",animation:"sooSpin 1s linear infinite",margin:"0 auto" }} />
+              <p style={{ color:"#888",marginTop:18 }}>Weaving your life vision...</p>
             </div>
           )}
           {!visionLoading && doneIds.length > 0 && (
             <div>
-              <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: 32, marginBottom: 36, alignItems: "center" }}>
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
-                  <div style={{ fontSize: 11, color: "#666", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 4 }}>Life Wheel</div>
-                  {doneIds.length >= 3 ? <LifeWheel /> : <div style={{ width: 280, height: 280, display: "flex", alignItems: "center", justifyContent: "center", color: "#555", fontSize: 13, textAlign: "center", border: "1px dashed rgba(255,255,255,0.1)", borderRadius: 12 }}>Set 3+ goals to see your wheel</div>}
+              <div style={{ display:"grid",gridTemplateColumns:"auto 1fr",gap:32,marginBottom:36,alignItems:"center" }}>
+                <div style={{ display:"flex",flexDirection:"column",alignItems:"center",gap:10 }}>
+                  <div style={{ fontSize:11,color:"#666",letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:4 }}>Life Wheel</div>
+                  {doneIds.length >= 3 ? <LifeWheel /> : <div style={{ width:280,height:280,display:"flex",alignItems:"center",justifyContent:"center",color:"#555",fontSize:13,textAlign:"center",border:"1px dashed rgba(255,255,255,0.1)",borderRadius:12 }}>Set 3+ goals to see your wheel</div>}
                 </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                  <div style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 14, padding: "18px 20px" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                      <span style={{ fontSize: 13, color: "#ddd" }}>Overall Life Progress</span>
-                      <span style={{ fontSize: 22, color: "#FFD700", fontWeight: 700 }}>{avgScore}%</span>
+                <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
+                  <div style={{ background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:14,padding:"18px 20px" }}>
+                    <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10 }}>
+                      <span style={{ fontSize:13,color:"#ddd" }}>Overall Life Progress</span>
+                      <span style={{ fontSize:22,color:"#FFD700",fontWeight:700 }}>{avgScore}%</span>
                     </div>
-                    <div style={{ height: 10, background: "rgba(255,255,255,0.07)", borderRadius: 5, overflow: "hidden" }}>
-                      <div style={{ height: "100%", width: `${avgScore}%`, background: "linear-gradient(90deg, #FFD700, #FF9500)", borderRadius: 5, transition: "width 1s ease" }} />
-                    </div>
+                    <div style={{ height:10,background:"rgba(255,255,255,0.07)",borderRadius:5,overflow:"hidden" }}><div style={{ height:"100%",width:`${avgScore}%`,background:"linear-gradient(90deg,#FFD700,#FF9500)",borderRadius:5,transition:"width 1s ease" }} /></div>
                   </div>
-                  {doneIds.map(id => {
-                    const c = cat(id); const s = sc(id);
-                    return (
-                      <div key={id} style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                        <span style={{ color: c?.color, fontSize: 16, width: 20, flexShrink: 0 }}>{c?.icon}</span>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                            <span style={{ fontSize: 12, color: "#ccc" }}>{c?.name}</span>
-                            <span style={{ fontSize: 12, color: c?.color }}>{s}/100</span>
-                          </div>
-                          <div style={{ height: 5, background: "rgba(255,255,255,0.07)", borderRadius: 3, overflow: "hidden" }}>
-                            <div style={{ height: "100%", width: `${s}%`, background: c?.color, borderRadius: 3, transition: "width 0.8s ease" }} />
-                          </div>
-                        </div>
-                        <span style={{ fontSize: 11, color: "#555", minWidth: 36, textAlign: "right" }}>{(logs[id]||[]).length} logs</span>
-                      </div>
-                    );
-                  })}
+                  {doneIds.map(id => { const c = cat(id); const s = sc(id); return (<div key={id} style={{ display:"flex",alignItems:"center",gap:12 }}><span style={{ color:c?.color,fontSize:16,width:20,flexShrink:0 }}>{c?.icon}</span><div style={{ flex:1 }}><div style={{ display:"flex",justifyContent:"space-between",marginBottom:4 }}><span style={{ fontSize:12,color:"#ccc" }}>{c?.name}</span><span style={{ fontSize:12,color:c?.color }}>{s}/100</span></div><div style={{ height:5,background:"rgba(255,255,255,0.07)",borderRadius:3,overflow:"hidden" }}><div style={{ height:"100%",width:`${s}%`,background:c?.color,borderRadius:3,transition:"width 0.8s ease" }} /></div></div><span style={{ fontSize:11,color:"#555",minWidth:36,textAlign:"right" }}>{(logs[id]||[]).length} logs</span></div>); })}
                 </div>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 36 }}>
-                <div style={{ background: "rgba(124,232,160,0.05)", border: "1px solid rgba(124,232,160,0.15)", borderRadius: 14, padding: "18px 20px" }}>
-                  <div style={{ fontSize: 11, color: "#7CE8A0", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 14 }}>Strongest Areas</div>
-                  {topGoals.slice(0, 3).map(id => { const c = cat(id); return (
-                    <div key={id} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-                      <span style={{ fontSize: 14, color: c?.color }}>{c?.icon}</span>
-                      <span style={{ fontSize: 13, color: "#ccc", flex: 1 }}>{c?.name}</span>
-                      <span style={{ fontSize: 12, color: "#7CE8A0" }}>{sc(id)}</span>
-                    </div>
-                  ); })}
+              <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:36 }}>
+                <div style={{ background:"rgba(124,232,160,0.05)",border:"1px solid rgba(124,232,160,0.15)",borderRadius:14,padding:"18px 20px" }}>
+                  <div style={{ fontSize:11,color:"#7CE8A0",letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:14 }}>Strongest Areas</div>
+                  {topGoals.slice(0,3).map(id => { const c = cat(id); return (<div key={id} style={{ display:"flex",alignItems:"center",gap:10,marginBottom:10 }}><span style={{ fontSize:14,color:c?.color }}>{c?.icon}</span><span style={{ fontSize:13,color:"#ccc",flex:1 }}>{c?.name}</span><span style={{ fontSize:12,color:"#7CE8A0" }}>{sc(id)}</span></div>); })}
                 </div>
-                <div style={{ background: "rgba(232,124,124,0.05)", border: "1px solid rgba(232,124,124,0.15)", borderRadius: 14, padding: "18px 20px" }}>
-                  <div style={{ fontSize: 11, color: "#E87C7C", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 14 }}>Needs Attention</div>
-                  {needsWork.map(id => { const c = cat(id); return (
-                    <div key={id} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-                      <span style={{ fontSize: 14, color: c?.color }}>{c?.icon}</span>
-                      <span style={{ fontSize: 13, color: "#ccc", flex: 1 }}>{c?.name}</span>
-                      <span style={{ fontSize: 11, color: "#E87C7C" }}>+{100 - sc(id)} to go</span>
-                    </div>
-                  ); })}
+                <div style={{ background:"rgba(232,124,124,0.05)",border:"1px solid rgba(232,124,124,0.15)",borderRadius:14,padding:"18px 20px" }}>
+                  <div style={{ fontSize:11,color:"#E87C7C",letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:14 }}>Needs Attention</div>
+                  {needsWork.map(id => { const c = cat(id); return (<div key={id} style={{ display:"flex",alignItems:"center",gap:10,marginBottom:10 }}><span style={{ fontSize:14,color:c?.color }}>{c?.icon}</span><span style={{ fontSize:13,color:"#ccc",flex:1 }}>{c?.name}</span><span style={{ fontSize:11,color:"#E87C7C" }}>+{100-sc(id)} to go</span></div>); })}
                 </div>
               </div>
               {vision && (
-                <div style={{ marginBottom: 36 }}>
-                  <div style={{ fontSize: 11, color: "#666", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 16, display: "flex", alignItems: "center", gap: 10 }}>
-                    <span style={{ flex: 1, height: 1, background: "rgba(255,255,255,0.06)" }} />
-                    Your Life Vision Manifesto
-                    <span style={{ flex: 1, height: 1, background: "rgba(255,255,255,0.06)" }} />
+                <div style={{ marginBottom:36 }}>
+                  <div style={{ fontSize:11,color:"#666",letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:16,display:"flex",alignItems:"center",gap:10 }}>
+                    <span style={{ flex:1,height:1,background:"rgba(255,255,255,0.06)" }} />Your Life Vision Manifesto<span style={{ flex:1,height:1,background:"rgba(255,255,255,0.06)" }} />
                   </div>
-                  <div style={{ background: "rgba(255,215,0,0.03)", border: "1px solid rgba(255,215,0,0.12)", borderRadius: 16, padding: "34px 38px" }}>
-                    {vision.split("\n").map((line, i) =>
-                      line.trim() ? <p key={i} style={{ fontSize: 17, lineHeight: 1.85, color: "#ddd", margin: "0 0 14px" }}>{line}</p> : <br key={i} />
-                    )}
+                  <div style={{ background:"rgba(255,215,0,0.03)",border:"1px solid rgba(255,215,0,0.12)",borderRadius:16,padding:"34px 38px" }}>
+                    {vision.split("\n").map((line,i) => line.trim() ? <p key={i} style={{ fontSize:17,lineHeight:1.85,color:"#ddd",margin:"0 0 14px" }}>{line}</p> : <br key={i} />)}
                   </div>
                 </div>
               )}
             </div>
           )}
-          <div style={{ display: "flex", gap: 10, marginTop: 8, marginBottom: 26 }}>
-            <button onClick={generateVision} style={{ background: "#FFD700", color: "#000", border: "none", borderRadius: 9, padding: "12px 22px", fontSize: 14, fontFamily: "Georgia,serif", fontWeight: 700, cursor: "pointer" }}>
-              {vision ? "Regenerate Vision" : "Generate Life Vision"}
-            </button>
-            {vision && <button onClick={() => navigator.clipboard?.writeText(vision)} style={{ background: "transparent", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 9, padding: "12px 18px", fontSize: 14, color: "#aaa", cursor: "pointer", fontFamily: "Georgia,serif" }}>Copy Text</button>}
+          <div style={{ display:"flex",gap:10,marginTop:8,marginBottom:26 }}>
+            <button onClick={generateVision} style={{ background:"#FFD700",color:"#000",border:"none",borderRadius:9,padding:"12px 22px",fontSize:14,fontFamily:"Georgia,serif",fontWeight:700,cursor:"pointer" }}>{vision?"Regenerate Vision":"Generate Life Vision"}</button>
+            {vision && <button onClick={() => navigator.clipboard?.writeText(vision)} style={{ background:"transparent",border:"1px solid rgba(255,255,255,0.15)",borderRadius:9,padding:"12px 18px",fontSize:14,color:"#aaa",cursor:"pointer",fontFamily:"Georgia,serif" }}>Copy Text</button>}
           </div>
         </div>
       );
     }
-
     return null;
   };
 
   return (
-    <div style={{ minHeight: "100vh", background: "#080808", color: "#e0e0e0", fontFamily: "Georgia,serif" }}>
+    <div style={{ minHeight:"100vh",background:"#080808",color:"#e0e0e0",fontFamily:"Georgia,serif" }}>
       <Nav tab={tab} setTab={setTab} hasGoals={doneIds.length > 0} userName={userName} />
       {renderScreen()}
       <Coach userName={userName} goals={goals} scores={scores} logs={logs} lifeVision={vision} currentPage={tab} />
       <style>{`
-        *{box-sizing:border-box}body{margin:0}
+        *{box-sizing:border-box}body{margin:0;background:#080808}
         @keyframes sooSpin{to{transform:rotate(360deg)}}
         textarea,input{color-scheme:dark}
         ::-webkit-scrollbar{width:4px}
         ::-webkit-scrollbar-track{background:transparent}
         ::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.1);border-radius:2px}
+        @keyframes coachBounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
       `}</style>
     </div>
   );
