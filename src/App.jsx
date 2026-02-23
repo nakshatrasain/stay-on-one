@@ -17,7 +17,7 @@ const CATS = [
   { id: 9,  name: "Financial Life",    icon: "◇", color: "#7CE8A0" },
   { id: 10, name: "Career",            icon: "▲", color: "#E87C7C" },
   { id: 11, name: "Quality of Life",   icon: "◬", color: "#7CC3E8" },
-  { id: 12, name: "Life Vision",       icon: "★", color: "#FFD700" },
+  { id: 12, name: "My Commitment",     icon: "★", color: "#FFD700" },
 ];
 
 const SUGGESTED_GOALS = {
@@ -33,6 +33,21 @@ const SUGGESTED_GOALS = {
   10: "Ship one meaningful piece of work every week in my career",
   11: "Design my environment so my daily life feels like the life I want",
   12: "Write down my core values and the person I am becoming",
+};
+
+const SUGGESTED_WHYS = {
+  1: "Because my energy is the foundation of everything else I want to build",
+  2: "Because I want to keep growing and thinking sharper than I did last year",
+  3: "Because I've been running on empty and I need to feel like myself again",
+  4: "Because I want to become someone I'm genuinely proud of",
+  5: "Because I want more peace and less noise in my daily life",
+  6: "Because this relationship deserves more than the scraps of my attention",
+  7: "Because my kids won't remember what I bought them — they'll remember if I showed up",
+  8: "Because the people in my life matter and I keep letting connections fade",
+  9: "Because I'm tired of money stress running in the background of everything",
+  10: "Because I know I'm capable of more and I'm done playing small",
+  11: "Because the quality of my daily life is the quality of my life",
+  12: "Because I want to live with intention, not just react to whatever comes",
 };
 
 const todayStr = () => new Date().toISOString().slice(0, 10);
@@ -233,52 +248,100 @@ function AuthScreen({ onAuth }) {
   );
 }
 
+
 // ─── ONBOARDING ───────────────────────────────────────────────────────────────
 function Onboarding({ userId, onComplete }) {
-  const [step, setStep] = useState(1);
-  const [name, setName] = useState("");
-  const [picked, setPicked] = useState([]);
-  const [vision, setVision] = useState("");
-  const [visionLoading, setVisionLoading] = useState(false);
+  const [step, setStep]           = useState(1);
+  const [name, setName]           = useState("");
+  const [picked, setPicked]       = useState([]);
+  const [commitment, setCommitment] = useState("");
+  const [commitLoading, setCommitLoading] = useState(false);
   const [goalInputs, setGoalInputs] = useState({});
-  const [goalIdx, setGoalIdx] = useState(0);
-  const [saving, setSaving] = useState(false);
+  const [whyInputs, setWhyInputs]   = useState({});
+  const [goalIdx, setGoalIdx]       = useState(0);
+  const [saving, setSaving]         = useState(false);
 
   const togglePick = (id) => {
     if (picked.includes(id)) setPicked(picked.filter(p => p !== id));
     else if (picked.length < 3) setPicked([...picked, id]);
   };
 
-  const generateVision = async () => {
-    setVisionLoading(true);
-    const areas = picked.map(id => cat(id)?.name).join(", ");
+  // Pre-fill why suggestions when entering step 4
+  const enterGoalStep = () => {
+    const prefilled = {};
+    picked.forEach(id => {
+      if (!whyInputs[id]) prefilled[id] = SUGGESTED_WHYS[id] || "";
+    });
+    setWhyInputs(w => ({ ...w, ...prefilled }));
+    setStep(4);
+  };
+
+  const generateCommitment = async () => {
+    setCommitLoading(true);
+    const goalDetails = picked.map(id => {
+      const c = cat(id);
+      const goal = goalInputs[id]?.trim() || SUGGESTED_GOALS[id];
+      const why  = whyInputs[id]?.trim()  || SUGGESTED_WHYS[id];
+      return `Area: ${c?.name}\nGoal: ${goal}\nWhy it matters: ${why}`;
+    }).join("\n\n");
+
     const reply = await callClaude(
-      [{ role: "user", content: `Name: ${name}\nFocus areas: ${areas}\n\nWrite their Life Vision.` }],
-      `You are a master life architect. Create a profound, inspiring Life Vision for this person in second person ("You are..."). Based only on their name and 3 chosen focus areas. Make it feel personal, specific, and emotionally resonant. 3-4 short powerful paragraphs. No headers. Poetic but grounded. End with a single bold commitment sentence starting with "Your one commitment:"`
+      [{ role: "user", content: `Name: ${name}\n\n${goalDetails}` }],
+      `You are a sharp, direct life coach writing a personalised 180-day commitment for someone.
+
+Rules:
+- Write EXACTLY one sentence per goal area. No more.
+- Each sentence must reference their SPECIFIC goal and their SPECIFIC "why" — not generic motivation.
+- Start each sentence with "I will" — first person, present tense, bold declaration.
+- Make it feel like something they'd screenshot. Punchy. Personal. Real.
+- Output ONLY the sentences, one per line. No headers. No intro. No outro. No labels.
+- Total output: ${picked.length} lines only.`
     );
-    setVision(reply);
-    setVisionLoading(false);
+
+    setCommitment(reply.trim());
+    setCommitLoading(false);
   };
 
   const handleFinish = async () => {
     setSaving(true);
-    const finalGoals = {};
+    const finalGoals  = {};
     const finalScores = {};
     picked.forEach(id => {
-      finalGoals[id] = { goal: goalInputs[id]?.trim() || SUGGESTED_GOALS[id] || "", metrics: "" };
+      finalGoals[id]  = {
+        goal:    goalInputs[id]?.trim()  || SUGGESTED_GOALS[id] || "",
+        why:     whyInputs[id]?.trim()   || SUGGESTED_WHYS[id]  || "",
+        metrics: "",
+      };
       finalScores[id] = 50;
     });
-    await db.save(userId, { user_name: name, goals: finalGoals, scores: finalScores, vision, logs: {}, chats: {} });
-    onComplete({ userName: name, goals: finalGoals, scores: finalScores, vision, logs: {}, chats: {} });
+    const startDate = todayStr();
+    await db.save(userId, {
+      user_name:  name,
+      goals:      finalGoals,
+      scores:     finalScores,
+      vision:     commitment,
+      logs:       {},
+      chats:      {},
+      start_date: startDate,
+    });
+    onComplete({
+      userName:  name,
+      goals:     finalGoals,
+      scores:    finalScores,
+      vision:    commitment,
+      logs:      {},
+      chats:     {},
+      startDate,
+    });
   };
 
   const currentCatId = picked[goalIdx];
-  const currentCat = cat(currentCatId);
+  const currentCat   = cat(currentCatId);
+  const commitLines  = commitment.split("\n").filter(l => l.trim());
 
-  const BG = { minHeight:"100vh", background:"#080808", fontFamily:"Georgia,serif", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"40px 20px" };
-  const STYLE = `html,body{background:#080808!important;margin:0;padding:0}*{box-sizing:border-box}@keyframes sooSpin{to{transform:rotate(360deg)}}@keyframes fadeIn{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}`;
+  const BG    = { minHeight:"100vh", background:"#080808", fontFamily:"Georgia,serif", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"40px 20px" };
+  const STYLE = `html,body{background:#080808!important;margin:0;padding:0}*{box-sizing:border-box}@keyframes sooSpin{to{transform:rotate(360deg)}}@keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}`;
 
-  // Step indicator
   const Steps = () => (
     <div style={{ display:"flex", gap:6, marginBottom:44, alignItems:"center" }}>
       {[1,2,3,4,5].map(s => (
@@ -287,18 +350,20 @@ function Onboarding({ userId, onComplete }) {
     </div>
   );
 
-  // ── STEP 1: Name ────────────────────────────────────────────────────────────
+  // ── Step 1: Name ─────────────────────────────────────────────────────────────
   if (step === 1) return (
     <div style={BG}>
       <style>{STYLE}</style>
       <Steps />
-      <div style={{ maxWidth:480, width:"100%", textAlign:"center", animation:"fadeIn 0.5s ease" }}>
-        <div style={{ fontSize:42, color:"#FFD700", marginBottom:16 }}>★</div>
+      <div style={{ maxWidth:480, width:"100%", textAlign:"center", animation:"fadeUp 0.5s ease" }}>
+        <div style={{ fontSize:44, color:"#FFD700", marginBottom:16 }}>★</div>
         <h1 style={{ fontSize:32, fontWeight:400, color:"#fff", margin:"0 0 12px", lineHeight:1.3 }}>Welcome to Stay on One.</h1>
-        <p style={{ fontSize:16, color:"#666", margin:"0 0 36px", lineHeight:1.7 }}>This is your personal accountability system. Built for people who want to stop starting over and start compounding.</p>
+        <p style={{ fontSize:16, color:"#666", margin:"0 0 10px", lineHeight:1.7 }}>Most people fail because they try to change everything at once.</p>
+        <p style={{ fontSize:16, color:"#aaa", margin:"0 0 36px", lineHeight:1.7 }}>This is your 180-day system. Pick what matters. Show up every day. Watch it compound.</p>
         <div style={{ textAlign:"left", marginBottom:20 }}>
           <label style={{ fontSize:11, color:"#666", letterSpacing:"0.1em", textTransform:"uppercase", display:"block", marginBottom:8 }}>What should I call you?</label>
-          <input autoFocus value={name} onChange={e => setName(e.target.value)} onKeyDown={e => e.key==="Enter" && name.trim() && setStep(2)}
+          <input autoFocus value={name} onChange={e => setName(e.target.value)}
+            onKeyDown={e => e.key==="Enter" && name.trim() && setStep(2)}
             placeholder="Your first name"
             style={{ width:"100%", background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:12, padding:"14px 18px", fontSize:18, color:"#fff", fontFamily:"Georgia,serif", outline:"none" }} />
         </div>
@@ -310,14 +375,14 @@ function Onboarding({ userId, onComplete }) {
     </div>
   );
 
-  // ── STEP 2: Pick 3 areas ─────────────────────────────────────────────────────
+  // ── Step 2: Pick 3 areas ──────────────────────────────────────────────────────
   if (step === 2) return (
     <div style={BG}>
       <style>{STYLE}</style>
       <Steps />
-      <div style={{ maxWidth:700, width:"100%", textAlign:"center", animation:"fadeIn 0.5s ease" }}>
+      <div style={{ maxWidth:700, width:"100%", textAlign:"center", animation:"fadeUp 0.5s ease" }}>
         <h2 style={{ fontSize:30, fontWeight:400, color:"#fff", margin:"0 0 10px" }}>Pick your 3 focus areas, {name}.</h2>
-        <p style={{ fontSize:15, color:"#666", margin:"0 0 32px", lineHeight:1.7 }}>Don't try to fix everything at once. Pick the 3 areas where growth would change everything else.</p>
+        <p style={{ fontSize:15, color:"#666", margin:"0 0 30px", lineHeight:1.7 }}>Not what you think you should fix. What actually keeps you up at night.</p>
         <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10, marginBottom:28 }}>
           {CATS.map(c => {
             const sel = picked.includes(c.id);
@@ -341,122 +406,161 @@ function Onboarding({ userId, onComplete }) {
     </div>
   );
 
-  // ── STEP 3: Life Vision generation ──────────────────────────────────────────
-  if (step === 3) return (
-    <div style={BG}>
-      <style>{STYLE}</style>
-      <Steps />
-      <div style={{ maxWidth:640, width:"100%", animation:"fadeIn 0.5s ease" }}>
-        <div style={{ textAlign:"center", marginBottom:32 }}>
-          <div style={{ fontSize:36, color:"#FFD700", marginBottom:12 }}>★</div>
-          <h2 style={{ fontSize:28, fontWeight:400, color:"#fff", margin:"0 0 10px" }}>Let's write your Life Vision.</h2>
-          <p style={{ fontSize:15, color:"#666", margin:0, lineHeight:1.7 }}>Before goals come clarity. Your vision is the reason behind everything you're about to track.</p>
-        </div>
-        {!vision && !visionLoading && (
-          <div style={{ textAlign:"center" }}>
-            <div style={{ display:"flex", gap:10, justifyContent:"center", marginBottom:28, flexWrap:"wrap" }}>
-              {picked.map(id => { const c = cat(id); return (
-                <div key={id} style={{ display:"flex", alignItems:"center", gap:7, background:`rgba(${hexRgb(c?.color||"#FFD700")},0.1)`, border:`1px solid ${c?.color}44`, borderRadius:20, padding:"7px 14px" }}>
-                  <span style={{ color:c?.color }}>{c?.icon}</span>
-                  <span style={{ fontSize:13, color:"#ccc" }}>{c?.name}</span>
-                </div>
-              ); })}
+  // ── Step 3: Set goals + why (one at a time) ───────────────────────────────────
+  if (step === 3) {
+    const cid  = picked[goalIdx];
+    const ccat = cat(cid);
+    const goalVal = goalInputs[cid] ?? SUGGESTED_GOALS[cid] ?? "";
+    const whyVal  = whyInputs[cid]  ?? SUGGESTED_WHYS[cid]  ?? "";
+    const isLast  = goalIdx === picked.length - 1;
+
+    const handleNext = () => {
+      // persist current values with fallbacks
+      setGoalInputs(g => ({ ...g, [cid]: goalVal }));
+      setWhyInputs(w  => ({ ...w, [cid]: whyVal  }));
+      if (isLast) {
+        // trigger commitment generation then move to step 4
+        setStep(4);
+      } else {
+        setGoalIdx(i => i + 1);
+      }
+    };
+
+    return (
+      <div style={BG}>
+        <style>{STYLE}</style>
+        <Steps />
+        <div style={{ maxWidth:560, width:"100%", animation:"fadeUp 0.5s ease" }}>
+          <div style={{ textAlign:"center", marginBottom:24 }}>
+            <div style={{ fontSize:12, color:"#555", marginBottom:6 }}>Goal {goalIdx+1} of {picked.length}</div>
+            <h2 style={{ fontSize:26, fontWeight:400, color:"#fff", margin:"0 0 6px" }}>Define your goal.</h2>
+            <p style={{ fontSize:14, color:"#666", margin:0 }}>Specific beats vague. Every time.</p>
+          </div>
+          <div style={{ background:`rgba(${hexRgb(ccat?.color||"#FFD700")},0.05)`, border:`1px solid ${ccat?.color}33`, borderRadius:18, padding:"28px 30px", display:"flex", flexDirection:"column", gap:18 }}>
+            {/* Area header */}
+            <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+              <span style={{ fontSize:28, color:ccat?.color }}>{ccat?.icon}</span>
+              <div style={{ fontSize:18, color:ccat?.color }}>{ccat?.name}</div>
             </div>
-            <button onClick={generateVision}
-              style={{ background:"#FFD700", color:"#000", border:"none", borderRadius:12, padding:"15px 36px", fontSize:16, fontFamily:"Georgia,serif", fontWeight:700, cursor:"pointer" }}>
-              Generate My Life Vision →
+
+            {/* Goal input */}
+            <div>
+              <label style={{ fontSize:11, color:"#666", letterSpacing:"0.1em", textTransform:"uppercase", display:"block", marginBottom:8 }}>Your one goal for this area</label>
+              <textarea rows={2} autoFocus
+                value={goalVal}
+                onChange={e => setGoalInputs(g => ({ ...g, [cid]: e.target.value }))}
+                placeholder={SUGGESTED_GOALS[cid]}
+                style={{ width:"100%", background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:10, padding:"12px 15px", fontSize:15, color:"#fff", fontFamily:"Georgia,serif", outline:"none", resize:"none" }} />
+            </div>
+
+            {/* Why input */}
+            <div>
+              <label style={{ fontSize:11, color:"#666", letterSpacing:"0.1em", textTransform:"uppercase", display:"block", marginBottom:8 }}>Why does this matter to you right now?</label>
+              <textarea rows={2}
+                value={whyVal}
+                onChange={e => setWhyInputs(w => ({ ...w, [cid]: e.target.value }))}
+                placeholder={SUGGESTED_WHYS[cid]}
+                style={{ width:"100%", background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:10, padding:"12px 15px", fontSize:14, color:"#ddd", fontFamily:"Georgia,serif", outline:"none", resize:"none", fontStyle:"italic" }} />
+              <div style={{ fontSize:11, color:"#444", marginTop:5 }}>The placeholder above is a suggestion — edit it or keep it.</div>
+            </div>
+
+            <button onClick={handleNext}
+              style={{ background:"#FFD700", color:"#000", border:"none", borderRadius:10, padding:"13px", fontSize:15, fontFamily:"Georgia,serif", fontWeight:700, cursor:"pointer" }}>
+              {isLast ? "Generate My 180-Day Commitment →" : "Next →"}
             </button>
           </div>
-        )}
-        {visionLoading && (
-          <div style={{ textAlign:"center", padding:"40px 0" }}>
-            <div style={{ width:34, height:34, border:"2px solid rgba(255,215,0,0.2)", borderTop:"2px solid #FFD700", borderRadius:"50%", animation:"sooSpin 1s linear infinite", margin:"0 auto 18px" }} />
-            <p style={{ color:"#888", fontSize:15 }}>Writing your vision...</p>
-          </div>
-        )}
-        {vision && !visionLoading && (
-          <div style={{ animation:"fadeIn 0.6s ease" }}>
-            <div style={{ background:"rgba(255,215,0,0.04)", border:"1px solid rgba(255,215,0,0.15)", borderRadius:16, padding:"30px 34px", marginBottom:24 }}>
-              {vision.split("\n").filter(l => l.trim()).map((line, i) => (
-                <p key={i} style={{ fontSize:16, lineHeight:1.85, color:"#ddd", margin:"0 0 14px", fontStyle: line.startsWith("Your one commitment") ? "italic" : "normal", color: line.startsWith("Your one commitment") ? "#FFD700" : "#ddd" }}>{line}</p>
-              ))}
-            </div>
-            <div style={{ display:"flex", gap:10 }}>
-              <button onClick={generateVision} style={{ background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:10, padding:"12px 20px", fontSize:14, color:"#888", cursor:"pointer", fontFamily:"Georgia,serif" }}>Regenerate</button>
-              <button onClick={() => setStep(4)} style={{ flex:1, background:"#FFD700", color:"#000", border:"none", borderRadius:10, padding:"13px", fontSize:16, fontFamily:"Georgia,serif", fontWeight:700, cursor:"pointer" }}>This is my vision. Set my goals →</button>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-
-  // ── STEP 4: Set goals ────────────────────────────────────────────────────────
-  if (step === 4) return (
-    <div style={BG}>
-      <style>{STYLE}</style>
-      <Steps />
-      <div style={{ maxWidth:540, width:"100%", animation:"fadeIn 0.5s ease" }}>
-        <div style={{ textAlign:"center", marginBottom:28 }}>
-          <div style={{ fontSize:13, color:"#555" }}>Goal {goalIdx+1} of {picked.length}</div>
-          <h2 style={{ fontSize:26, fontWeight:400, color:"#fff", margin:"8px 0 6px" }}>Now set your one goal.</h2>
-          <p style={{ fontSize:14, color:"#666", margin:0 }}>One goal per area. Specific. Achievable. Yours.</p>
+          {goalIdx > 0 && (
+            <button onClick={() => setGoalIdx(i=>i-1)} style={{ background:"none", border:"none", color:"#555", cursor:"pointer", fontSize:13, fontFamily:"Georgia,serif", marginTop:14, display:"block" }}>← Back</button>
+          )}
         </div>
-        {currentCat && (
-          <div style={{ background:`rgba(${hexRgb(currentCat.color)},0.06)`, border:`1px solid ${currentCat.color}44`, borderRadius:18, padding:"28px 30px", display:"flex", flexDirection:"column", gap:16 }}>
-            <div style={{ display:"flex", alignItems:"center", gap:14 }}>
-              <span style={{ fontSize:30, color:currentCat.color }}>{currentCat.icon}</span>
-              <div>
-                <div style={{ fontSize:19, color:currentCat.color }}>{currentCat.name}</div>
-                <div style={{ fontSize:13, color:"#555", marginTop:2 }}>What's your one goal here?</div>
+      </div>
+    );
+  }
+
+  // ── Step 4: 180-Day Commitment ────────────────────────────────────────────────
+  if (step === 4) {
+    // Auto-generate on mount
+    useEffect(() => { if (!commitment && !commitLoading) generateCommitment(); }, []);
+
+    return (
+      <div style={BG}>
+        <style>{STYLE}</style>
+        <Steps />
+        <div style={{ maxWidth:600, width:"100%", animation:"fadeUp 0.5s ease" }}>
+          <div style={{ textAlign:"center", marginBottom:32 }}>
+            <div style={{ fontSize:11, color:"#FFD700", letterSpacing:"0.2em", textTransform:"uppercase", marginBottom:12 }}>Your 180-Day Commitment</div>
+            <h2 style={{ fontSize:28, fontWeight:400, color:"#fff", margin:"0 0 10px" }}>This is what you're committing to.</h2>
+            <p style={{ fontSize:14, color:"#666", margin:0 }}>Based on your goals and exactly why they matter to you.</p>
+          </div>
+
+          {commitLoading && (
+            <div style={{ textAlign:"center", padding:"50px 0" }}>
+              <div style={{ width:32, height:32, border:"2px solid rgba(255,215,0,0.2)", borderTop:"2px solid #FFD700", borderRadius:"50%", animation:"sooSpin 1s linear infinite", margin:"0 auto 16px" }} />
+              <p style={{ color:"#888", fontSize:14 }}>Writing your personal commitment...</p>
+            </div>
+          )}
+
+          {!commitLoading && commitment && (
+            <div style={{ animation:"fadeUp 0.6s ease" }}>
+              {/* Visual cards — one per goal */}
+              <div style={{ display:"flex", flexDirection:"column", gap:12, marginBottom:28 }}>
+                {picked.map((id, i) => {
+                  const c    = cat(id);
+                  const line = commitLines[i] || "";
+                  return (
+                    <div key={id} style={{ display:"flex", gap:16, alignItems:"flex-start", background:`rgba(${hexRgb(c?.color||"#FFD700")},0.07)`, border:`1px solid ${c?.color}44`, borderRadius:16, padding:"20px 22px" }}>
+                      <div style={{ width:44, height:44, borderRadius:12, background:`rgba(${hexRgb(c?.color||"#FFD700")},0.15)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, flexShrink:0, color:c?.color }}>
+                        {c?.icon}
+                      </div>
+                      <div>
+                        <div style={{ fontSize:11, color:c?.color, letterSpacing:"0.1em", textTransform:"uppercase", marginBottom:6 }}>{c?.name}</div>
+                        <div style={{ fontSize:16, color:"#fff", lineHeight:1.6, fontStyle:"italic" }}>{line}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div style={{ display:"flex", gap:10 }}>
+                <button onClick={generateCommitment}
+                  style={{ background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:10, padding:"12px 20px", fontSize:14, color:"#888", cursor:"pointer", fontFamily:"Georgia,serif" }}>
+                  Regenerate
+                </button>
+                <button onClick={() => setStep(5)}
+                  style={{ flex:1, background:"#FFD700", color:"#000", border:"none", borderRadius:10, padding:"13px", fontSize:16, fontFamily:"Georgia,serif", fontWeight:700, cursor:"pointer" }}>
+                  This is my commitment →
+                </button>
               </div>
             </div>
-            <div style={{ fontSize:12, color:"#555", fontStyle:"italic", background:"rgba(255,255,255,0.03)", border:"1px solid rgba(255,255,255,0.06)", borderRadius:8, padding:"10px 14px" }}>
-              Suggested: {SUGGESTED_GOALS[currentCatId]}
-            </div>
-            <textarea rows={3} autoFocus
-              value={goalInputs[currentCatId] || ""}
-              onChange={e => setGoalInputs(g => ({ ...g, [currentCatId]: e.target.value }))}
-              placeholder={SUGGESTED_GOALS[currentCatId]}
-              style={{ background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:10, padding:"12px 15px", fontSize:15, color:"#fff", fontFamily:"Georgia,serif", outline:"none", resize:"vertical", width:"100%" }} />
-            <div style={{ display:"flex", gap:10 }}>
-              <button onClick={() => { setGoalInputs(g => ({ ...g, [currentCatId]: SUGGESTED_GOALS[currentCatId] })); goalIdx < picked.length-1 ? setGoalIdx(i=>i+1) : setStep(5); }}
-                style={{ flex:1, background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:9, padding:"12px", fontSize:13, color:"#aaa", cursor:"pointer", fontFamily:"Georgia,serif" }}>
-                Use suggestion
-              </button>
-              <button onClick={() => { if (!goalInputs[currentCatId]?.trim()) setGoalInputs(g => ({ ...g, [currentCatId]: SUGGESTED_GOALS[currentCatId] })); goalIdx < picked.length-1 ? setGoalIdx(i=>i+1) : setStep(5); }}
-                style={{ flex:2, background:"#FFD700", color:"#000", border:"none", borderRadius:9, padding:"12px", fontSize:15, fontFamily:"Georgia,serif", fontWeight:700, cursor:"pointer" }}>
-                {goalIdx < picked.length-1 ? "Next →" : "Done →"}
-              </button>
-            </div>
-          </div>
-        )}
-        {goalIdx > 0 && (
-          <button onClick={() => setGoalIdx(i=>i-1)} style={{ background:"none", border:"none", color:"#555", cursor:"pointer", fontSize:13, fontFamily:"Georgia,serif", marginTop:14, display:"block" }}>← Back</button>
-        )}
+          )}
+        </div>
       </div>
-    </div>
-  );
+    );
+  }
 
-  // ── STEP 5: Ready ────────────────────────────────────────────────────────────
+  // ── Step 5: Ready ─────────────────────────────────────────────────────────────
   if (step === 5) return (
     <div style={BG}>
       <style>{STYLE}</style>
-      <div style={{ maxWidth:520, width:"100%", textAlign:"center", animation:"fadeIn 0.5s ease" }}>
+      <div style={{ maxWidth:520, width:"100%", textAlign:"center", animation:"fadeUp 0.5s ease" }}>
         <div style={{ fontSize:52, marginBottom:18 }}>🎯</div>
         <h2 style={{ fontSize:32, fontWeight:400, color:"#fff", margin:"0 0 14px", lineHeight:1.3 }}>You're ready, {name}.</h2>
-        <p style={{ fontSize:16, color:"#aaa", margin:"0 0 10px", lineHeight:1.7 }}>Your vision is set. Your goals are locked in. All that's left is Day 1.</p>
-        <p style={{ fontSize:14, color:"#666", margin:"0 0 36px", lineHeight:1.7, fontStyle:"italic" }}>"The first step is the hardest. You've already taken three."</p>
+        <p style={{ fontSize:16, color:"#aaa", margin:"0 0 8px", lineHeight:1.7 }}>180 days. {picked.length} goals. Starting today.</p>
+        <p style={{ fontSize:14, color:"#666", margin:"0 0 32px", fontStyle:"italic" }}>"Greatness is just consistency, compounded."</p>
         <div style={{ display:"flex", flexDirection:"column", gap:10, marginBottom:32 }}>
-          {picked.map(id => { const c = cat(id); return (
-            <div key={id} style={{ display:"flex", alignItems:"center", gap:12, background:`rgba(${hexRgb(c?.color||"#FFD700")},0.07)`, border:`1px solid ${c?.color}33`, borderRadius:12, padding:"13px 18px", textAlign:"left" }}>
-              <span style={{ fontSize:20, color:c?.color }}>{c?.icon}</span>
-              <div>
-                <div style={{ fontSize:13, color:c?.color }}>{c?.name}</div>
-                <div style={{ fontSize:12, color:"#777", marginTop:2 }}>{goalInputs[id] || SUGGESTED_GOALS[id]}</div>
+          {picked.map(id => {
+            const c = cat(id);
+            return (
+              <div key={id} style={{ display:"flex", alignItems:"flex-start", gap:12, background:`rgba(${hexRgb(c?.color||"#FFD700")},0.07)`, border:`1px solid ${c?.color}33`, borderRadius:12, padding:"14px 18px", textAlign:"left" }}>
+                <span style={{ fontSize:20, color:c?.color, flexShrink:0 }}>{c?.icon}</span>
+                <div>
+                  <div style={{ fontSize:12, color:c?.color, marginBottom:3 }}>{c?.name}</div>
+                  <div style={{ fontSize:13, color:"#888" }}>{goalInputs[id] || SUGGESTED_GOALS[id]}</div>
+                  <div style={{ fontSize:12, color:"#555", marginTop:4, fontStyle:"italic" }}>{whyInputs[id] || SUGGESTED_WHYS[id]}</div>
+                </div>
               </div>
-            </div>
-          ); })}
+            );
+          })}
         </div>
         <button onClick={handleFinish} disabled={saving}
           style={{ width:"100%", background:saving?"rgba(255,215,0,0.3)":"#FFD700", color:"#000", border:"none", borderRadius:12, padding:"16px", fontSize:17, fontFamily:"Georgia,serif", fontWeight:700, cursor:saving?"default":"pointer" }}>
@@ -468,6 +572,7 @@ function Onboarding({ userId, onComplete }) {
 
   return null;
 }
+
 
 // ─── LANDING PAGE ────────────────────────────────────────────────────────────
 function LandingPage({ onEnter }) {
@@ -977,7 +1082,7 @@ function Coach({ userName, goals, scores, logs, lifeVision, currentPage }) {
     if (!open || msgs.length > 0) return;
     const completedGoals = Object.keys(goals).filter(k => goals[k]?.goal?.trim());
     const pageCtx = {
-      vision: "I see you've been working on your Life Vision — ask me anything about it.",
+      vision: "I see you've been working on your My Commitment — ask me anything about it.",
       checkin: "You're doing your daily check-in — great habit.",
       dailycheckin: "You're reviewing all your goals today — I'm here to help.",
       progress: "You're reviewing your progress — I can help you interpret it.",
@@ -997,8 +1102,8 @@ function Coach({ userName, goals, scores, logs, lifeVision, currentPage }) {
           return `- ${c?.name}: "${goals[id].goal}" (score: ${scores[parseInt(id)] ?? 50}/100)`;
         }).join("\n")
       : "No goals set yet.";
-    const visionCtx = lifeVision ? `\n\nLife Vision:\n${lifeVision.slice(0, 500)}...` : "";
-    const pageCtx = { vision: "Viewing Life Vision.", checkin: "Doing single goal check-in.", dailycheckin: "Doing full daily check-in across all goals.", progress: "Reviewing progress history.", dashboard: "On the main dashboard.", setup: "Setting up goals." }[currentPage] || "";
+    const visionCtx = lifeVision ? `\n\nMy Commitment:\n${lifeVision.slice(0, 500)}...` : "";
+    const pageCtx = { vision: "Viewing My Commitment.", checkin: "Doing single goal check-in.", dailycheckin: "Doing full daily check-in across all goals.", progress: "Reviewing progress history.", dashboard: "On the main dashboard.", setup: "Setting up goals." }[currentPage] || "";
     return `You are Coach inside "Stay on One" — a life accountability app inspired by Paul Graham's philosophy that greatness comes from compounding one thing long enough.\n\nUser: ${userName || "this person"}\nGoals:\n${goalsCtx}${visionCtx}\nContext: ${pageCtx}\n\nBe warm but direct. Reference actual goals by name. Keep responses to 2-4 sentences. If they want to chase something new, redirect to their one thing.`;
   };
 
@@ -1119,6 +1224,7 @@ export default function App() {
   const [logs, setLogs]             = useState({});
   const [chats, setChats]           = useState({});
   const [vision, setVision]         = useState("");
+  const [startDate, setStartDate]     = useState(null);
   const [editGoal, setEditGoal]     = useState({ goal: "", metrics: "" });
   const [ciLoading, setCiLoading]   = useState(false);
   const [ciFeedback, setCiFeedback] = useState({});
@@ -1161,6 +1267,7 @@ export default function App() {
       setLogs(data.logs || {});
       setChats(data.chats || {});
       setVision(data.vision || "");
+      setStartDate(data.start_date || data.created_at?.slice(0,10) || todayStr());
       setScreen("app");
       setTab(Object.keys(data.goals || {}).length ? "dashboard" : "setup");
     } else {
@@ -1184,6 +1291,7 @@ export default function App() {
     setGoals(profile.goals);
     setScores(profile.scores);
     setVision(profile.vision);
+    setStartDate(profile.startDate || todayStr());
     setLogs(profile.logs || {});
     setChats(profile.chats || {});
     setScreen("app");
@@ -1252,7 +1360,7 @@ export default function App() {
   const generateVision = async () => {
     setVisionLoading(true);
     const goalsText = doneIds.map(id => `${cat(id)?.name} (score ${sc(id)}/100): ${goals[id].goal}`).join("\n");
-    const reply = await callClaude([{ role: "user", content: `Name: ${userName}\nGoals:\n${goalsText}\n\nWrite their updated Life Vision.` }], `You are a master life architect. Update this person's Life Vision manifesto. Second person, bold and specific, 3-4 paragraphs. End with "Your one commitment:" sentence.`);
+    const reply = await callClaude([{ role: "user", content: `Name: ${userName}\nGoals:\n${goalsText}\n\nWrite their updated My Commitment.` }], `You are a master life architect. Update this person's My Commitment manifesto. Second person, bold and specific, 3-4 paragraphs. End with "Your one commitment:" sentence.`);
     setVision(reply);
     setVisionLoading(false);
     await save({ vision: reply });
@@ -1490,110 +1598,166 @@ export default function App() {
     if (tab === "dailycheckin") return <DailyCheckin />;
 
     if (tab === "dashboard") {
-      const avg = doneIds.length ? Math.round(doneIds.reduce((a, id) => a + sc(id), 0) / doneIds.length) : 0;
-      const needCheckin = doneIds.filter(id => !todayLogged(id));
-      const totalLogs = doneIds.reduce((a, id) => a + (logs[id]?.length || 0), 0);
-      const bestStreak = doneIds.length ? Math.max(...doneIds.map(id => getStreak(logs[id] || []))) : 0;
-      const allRecentLogs = doneIds.flatMap(id => (logs[id] || []).map(l => ({ ...l, catId: id }))).sort((a, b) => b.date.localeCompare(a.date));
-      const lastLogDate = allRecentLogs[0]?.date;
-      const daysSinceLast = lastLogDate ? daysSince(lastLogDate) : null;
+      const avg          = doneIds.length ? Math.round(doneIds.reduce((a, id) => a + sc(id), 0) / doneIds.length) : 0;
+      const needCheckin  = doneIds.filter(id => !todayLogged(id));
+      const totalLogs    = doneIds.reduce((a, id) => a + (logs[id]?.length || 0), 0);
+      const bestStreak   = doneIds.length ? Math.max(...doneIds.map(id => getStreak(logs[id] || []))) : 0;
+      const allRecentLogs = doneIds.flatMap(id => (logs[id]||[]).map(l=>({...l,catId:id}))).sort((a,b)=>b.date.localeCompare(a.date));
+      const daysSinceLast = allRecentLogs[0]?.date ? daysSince(allRecentLogs[0].date) : null;
+
+      // Day X of 180 calculation
+      const start       = startDate ? new Date(startDate) : new Date();
+      const today       = new Date();
+      const dayNumber   = Math.min(180, Math.max(1, Math.floor((today - start) / 86400000) + 1));
+      const timeElapsed = Math.round((dayNumber / 180) * 100);
+
+      // Greeting message
       let greetingMsg = "";
-      if (totalLogs === 0) greetingMsg = "You've set your goals. Now start your first check-in.";
+      if (totalLogs === 0) greetingMsg = "You've set your goals. Your first check-in starts the clock.";
       else if (daysSinceLast === 0) { const last = allRecentLogs[0]; const c = cat(last.catId); greetingMsg = `You checked in on ${c?.name} today. ${last.delta >= 0 ? `+${last.delta}` : last.delta} pts. Keep going.`; }
-      else if (daysSinceLast === 1) greetingMsg = `Yesterday was your last check-in. ${needCheckin.length} goal${needCheckin.length !== 1 ? "s" : ""} waiting for today.`;
-      else if (daysSinceLast > 1) greetingMsg = `You haven't checked in for ${daysSinceLast} days. That's okay. The streak starts again today.`;
-      else greetingMsg = `${needCheckin.length} goal${needCheckin.length !== 1 ? "s" : ""} waiting for today's check-in.`;
+      else if (daysSinceLast === 1) greetingMsg = `Yesterday was your last check-in. ${needCheckin.length} goal${needCheckin.length!==1?"s":""} waiting for today.`;
+      else if (daysSinceLast > 1)  greetingMsg = `You haven't checked in for ${daysSinceLast} days. That's okay. The streak starts again today.`;
+      else greetingMsg = `${needCheckin.length} goal${needCheckin.length!==1?"s":""} waiting for today's check-in.`;
+
       return (
         <div style={{ padding:"34px 26px", maxWidth:1100, margin:"0 auto" }}>
-          <div style={{ background:"linear-gradient(135deg,rgba(255,215,0,0.06),rgba(255,150,0,0.03))", border:"1px solid rgba(255,215,0,0.15)", borderRadius:16, padding:"22px 26px", marginBottom:22 }}>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", flexWrap:"wrap", gap:16 }}>
+
+          {/* ── HERO: Day X of 180 ────────────────────────────────────────── */}
+          <div style={{ background:"linear-gradient(135deg,rgba(255,215,0,0.07),rgba(255,150,0,0.03))", border:"1px solid rgba(255,215,0,0.18)", borderRadius:20, padding:"26px 30px", marginBottom:20 }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", flexWrap:"wrap", gap:20, marginBottom:20 }}>
               <div>
-                <h2 style={{ fontSize:26, fontWeight:400, color:"#fff", margin:"0 0 8px" }}>Good {timeOfDay()}, {userName}.</h2>
+                <h2 style={{ fontSize:26, fontWeight:400, color:"#fff", margin:"0 0 6px" }}>Good {timeOfDay()}, {userName}.</h2>
                 <p style={{ color:"#aaa", fontSize:15, margin:0, lineHeight:1.6 }}>{greetingMsg}</p>
-                <p style={{ color:"#555", fontSize:13, margin:"6px 0 0", fontStyle:"italic" }}>"{PGQ[new Date().getDay() % PGQ.length]}"</p>
               </div>
-              <div style={{ display:"flex", gap:20, flexShrink:0 }}>
-                <div style={{ textAlign:"center" }}><div style={{ fontSize:30, color:"#FFD700", lineHeight:1 }}>{avg}</div><div style={{ fontSize:11, color:"#555", marginTop:3 }}>overall</div></div>
-                <div style={{ textAlign:"center" }}><div style={{ fontSize:30, color:"#FF9500", lineHeight:1 }}>{bestStreak > 0 ? `🔥${bestStreak}` : "—"}</div><div style={{ fontSize:11, color:"#555", marginTop:3 }}>streak</div></div>
-                <div style={{ textAlign:"center" }}><div style={{ fontSize:30, color:"#7CB9E8", lineHeight:1 }}>{totalLogs}</div><div style={{ fontSize:11, color:"#555", marginTop:3 }}>check-ins</div></div>
+              {/* Two numbers: day + score */}
+              <div style={{ display:"flex", gap:24, flexShrink:0 }}>
+                <div style={{ textAlign:"center", background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.08)", borderRadius:14, padding:"14px 20px" }}>
+                  <div style={{ fontSize:32, color:"#FFD700", lineHeight:1, fontWeight:300 }}>{dayNumber}</div>
+                  <div style={{ fontSize:11, color:"#555", marginTop:4, letterSpacing:"0.08em" }}>of 180 days</div>
+                </div>
+                <div style={{ textAlign:"center", background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.08)", borderRadius:14, padding:"14px 20px" }}>
+                  <div style={{ fontSize:32, color:avg>=70?"#7CE8A0":avg>=40?"#FFD700":"#E87C7C", lineHeight:1, fontWeight:300 }}>{avg}</div>
+                  <div style={{ fontSize:11, color:"#555", marginTop:4, letterSpacing:"0.08em" }}>overall score</div>
+                </div>
+                {bestStreak > 0 && (
+                  <div style={{ textAlign:"center", background:"rgba(255,150,0,0.08)", border:"1px solid rgba(255,150,0,0.2)", borderRadius:14, padding:"14px 20px" }}>
+                    <div style={{ fontSize:32, color:"#FF9500", lineHeight:1, fontWeight:300 }}>🔥{bestStreak}</div>
+                    <div style={{ fontSize:11, color:"#555", marginTop:4, letterSpacing:"0.08em" }}>best streak</div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Day 0 → 180 progress bar */}
+            <div>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+                <span style={{ fontSize:11, color:"#555", letterSpacing:"0.1em", textTransform:"uppercase" }}>Your 180-Day Journey</span>
+                <span style={{ fontSize:12, color:"#666" }}>{180 - dayNumber} days remaining</span>
+              </div>
+              {/* Time track */}
+              <div style={{ marginBottom:10 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", fontSize:10, color:"#444", marginBottom:4 }}>
+                  <span>Day 1</span><span>Day 90</span><span>Day 180</span>
+                </div>
+                <div style={{ position:"relative", height:10, background:"rgba(255,255,255,0.06)", borderRadius:5, overflow:"visible" }}>
+                  <div style={{ height:"100%", width:`${timeElapsed}%`, background:"linear-gradient(90deg,#FFD700,#FF9500)", borderRadius:5, transition:"width 1s ease" }} />
+                  {/* Dot marker */}
+                  <div style={{ position:"absolute", top:"50%", left:`${timeElapsed}%`, transform:"translate(-50%,-50%)", width:16, height:16, borderRadius:"50%", background:"#FFD700", border:"3px solid #080808", boxShadow:"0 0 8px rgba(255,215,0,0.6)" }} />
+                </div>
+              </div>
+              {/* Score track */}
+              <div>
+                <div style={{ display:"flex", justifyContent:"space-between", fontSize:10, color:"#444", marginBottom:4 }}>
+                  <span>Score 0</span><span>Score 50</span><span>Score 100</span>
+                </div>
+                <div style={{ position:"relative", height:10, background:"rgba(255,255,255,0.06)", borderRadius:5, overflow:"visible" }}>
+                  <div style={{ height:"100%", width:`${avg}%`, background:avg>=70?"linear-gradient(90deg,#7CE8A0,#3EC878)":avg>=40?"linear-gradient(90deg,#FFD700,#FF9500)":"linear-gradient(90deg,#E87C7C,#E84040)", borderRadius:5, transition:"width 1s ease" }} />
+                  <div style={{ position:"absolute", top:"50%", left:`${avg}%`, transform:"translate(-50%,-50%)", width:16, height:16, borderRadius:"50%", background:avg>=70?"#7CE8A0":avg>=40?"#FFD700":"#E87C7C", border:"3px solid #080808", boxShadow:`0 0 8px ${avg>=70?"rgba(124,232,160,0.6)":avg>=40?"rgba(255,215,0,0.6)":"rgba(232,124,124,0.6)"}` }} />
+                </div>
+              </div>
+              <div style={{ display:"flex", gap:16, marginTop:10, flexWrap:"wrap" }}>
+                <div style={{ display:"flex", alignItems:"center", gap:6 }}><div style={{ width:8, height:8, borderRadius:"50%", background:"#FFD700" }} /><span style={{ fontSize:11, color:"#555" }}>Time elapsed ({timeElapsed}%)</span></div>
+                <div style={{ display:"flex", alignItems:"center", gap:6 }}><div style={{ width:8, height:8, borderRadius:"50%", background:avg>=70?"#7CE8A0":avg>=40?"#FFD700":"#E87C7C" }} /><span style={{ fontSize:11, color:"#555" }}>Overall score ({avg}/100)</span></div>
               </div>
             </div>
           </div>
+
+          {/* Check-in nudge */}
           {needCheckin.length > 0 && (
-            <div style={{ display:"flex", alignItems:"center", gap:12, background:"rgba(255,215,0,0.07)", border:"1px solid rgba(255,215,0,0.2)", borderRadius:10, padding:"12px 16px", marginBottom:22 }}>
+            <div style={{ display:"flex", alignItems:"center", gap:12, background:"rgba(255,215,0,0.07)", border:"1px solid rgba(255,215,0,0.2)", borderRadius:10, padding:"12px 16px", marginBottom:20 }}>
               <span style={{ color:"#FFD700" }}>★</span>
               <span style={{ fontSize:14, color:"#ddd" }}>{needCheckin.length} goal{needCheckin.length > 1 ? "s" : ""} awaiting today's check-in</span>
-              <button onClick={() => { setDailyActive(needCheckin[0]); setTab("dailycheckin"); }} style={{ marginLeft:"auto", background:"rgba(255,215,0,0.15)", border:"1px solid rgba(255,215,0,0.3)", borderRadius:7, padding:"6px 14px", fontSize:13, color:"#FFD700", cursor:"pointer", fontFamily:"Georgia,serif" }}>Start Check-in</button>
+              <button onClick={() => { setDailyActive(needCheckin[0]); setTab("dailycheckin"); }}
+                style={{ marginLeft:"auto", background:"rgba(255,215,0,0.15)", border:"1px solid rgba(255,215,0,0.3)", borderRadius:7, padding:"6px 14px", fontSize:13, color:"#FFD700", cursor:"pointer", fontFamily:"Georgia,serif" }}>
+                Start Check-in
+              </button>
             </div>
           )}
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(285px,1fr))", gap:15 }}>
-            {doneIds.map(id => {
-              const c = cat(id);
-              const s = sc(id);
-              const logList = logs[id] || [];
-              const logged = todayLogged(id);
-              const last7 = logList.slice(-7);
-              const streak = getStreak(logList);
-              return (
-                <div key={id} style={{ background:"rgba(255,255,255,0.03)", border:`1px solid ${c?.color}33`, borderRadius:16, padding:20, display:"flex", flexDirection:"column", gap:8 }}>
-                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                    <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                      <span style={{ color:c?.color, fontSize:20 }}>{c?.icon}</span>
-                      <div>
-                        <div style={{ fontSize:13, color:c?.color }}>{c?.name}</div>
-                        <div style={{ fontSize:11, color:"#555", display:"flex", gap:6 }}>
-                          <span>{logList.length} logs</span>
-                          {streak > 0 && <span style={{ color:streak>=7?"#FF6500":"#FF9500" }}>🔥{streak}d</span>}
-                        </div>
-                      </div>
-                    </div>
-                    <AnimatedRing pct={s} prevPct={prevScores[id]} color={c?.color||"#FFD700"} size={50} stroke={4} />
-                  </div>
-                  <p style={{ fontSize:13, color:"#999", lineHeight:1.5, margin:0 }}>{goals[id].goal}</p>
-                  {last7.length > 0 && (
-                    <div style={{ display:"flex", gap:3, alignItems:"flex-end", height:22 }}>
-                      {last7.map((l, i) => <div key={i} style={{ flex:1, minHeight:3, height:`${Math.max(12,Math.abs(l.delta)/20*100)}%`, background:l.delta>=0?(c?.color||"#FFD700")+"88":"#E87C7C88", borderRadius:2 }} />)}
-                    </div>
-                  )}
-                  <div style={{ display:"flex", gap:7 }}>
-                    {!logged
-                      ? <button onClick={() => { setDailyActive(id); setTab("dailycheckin"); }} style={{ flex:1, background:`rgba(${hexRgb(c?.color||"#FFD700")},0.1)`, border:`1px solid ${c?.color}44`, borderRadius:7, padding:"6px", fontSize:12, color:c?.color, cursor:"pointer", fontFamily:"Georgia,serif" }}>+ Check in</button>
-                      : <span style={{ fontSize:12, color:(c?.color||"#FFD700")+"aa", padding:"6px 0", flex:1 }}>✓ Logged</span>}
-                    <button onClick={() => { setActiveId(id); setTab("chat"); }} style={{ background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:7, padding:"6px 10px", fontSize:12, color:"#aaa", cursor:"pointer", fontFamily:"Georgia,serif" }}>Coach</button>
-                    <button onClick={() => { setActiveId(id); setTab("progress"); }} style={{ background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:7, padding:"6px 10px", fontSize:12, color:"#aaa", cursor:"pointer", fontFamily:"Georgia,serif" }}>History</button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          {doneIds.length === 0 && (
+
+          {/* Goal cards */}
+          {doneIds.length === 0 ? (
             <div style={{ textAlign:"center", padding:"60px 0" }}>
               <div style={{ fontSize:40, marginBottom:16 }}>◎</div>
               <h3 style={{ fontSize:20, fontWeight:400, color:"#fff", margin:"0 0 10px" }}>No goals set yet</h3>
-              <p style={{ color:"#666", fontSize:14, margin:"0 0 24px" }}>Go to Goals and set your first goal to start tracking progress.</p>
+              <p style={{ color:"#666", fontSize:14, margin:"0 0 24px" }}>Go to Goals and set your first goal to start tracking.</p>
               <button onClick={() => setTab("setup")} style={{ background:"#FFD700", color:"#000", border:"none", borderRadius:9, padding:"12px 24px", fontSize:15, fontFamily:"Georgia,serif", fontWeight:700, cursor:"pointer" }}>Set Your Goals →</button>
             </div>
+          ) : (
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(285px,1fr))", gap:15 }}>
+              {doneIds.map(id => {
+                const c       = cat(id);
+                const s       = sc(id);
+                const logList = logs[id] || [];
+                const logged  = todayLogged(id);
+                const last7   = logList.slice(-7);
+                const streak  = getStreak(logList);
+                return (
+                  <div key={id} style={{ background:"rgba(255,255,255,0.03)", border:`1px solid ${c?.color}33`, borderRadius:16, padding:20, display:"flex", flexDirection:"column", gap:8 }}>
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                      <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                        <span style={{ color:c?.color, fontSize:20 }}>{c?.icon}</span>
+                        <div>
+                          <div style={{ fontSize:13, color:c?.color }}>{c?.name}</div>
+                          <div style={{ fontSize:11, color:"#555", display:"flex", gap:6 }}>
+                            <span>{logList.length} logs</span>
+                            {streak > 0 && <span style={{ color:streak>=7?"#FF6500":"#FF9500" }}>🔥{streak}d</span>}
+                          </div>
+                        </div>
+                      </div>
+                      <AnimatedRing pct={s} prevPct={prevScores[id]} color={c?.color||"#FFD700"} size={50} stroke={4} />
+                    </div>
+                    <p style={{ fontSize:13, color:"#999", lineHeight:1.5, margin:0 }}>{goals[id].goal}</p>
+                    {last7.length > 0 && (
+                      <div style={{ display:"flex", gap:3, alignItems:"flex-end", height:22 }}>
+                        {last7.map((l,i) => <div key={i} style={{ flex:1, minHeight:3, height:`${Math.max(12,Math.abs(l.delta)/20*100)}%`, background:l.delta>=0?(c?.color||"#FFD700")+"88":"#E87C7C88", borderRadius:2 }} />)}
+                      </div>
+                    )}
+                    <div style={{ display:"flex", gap:7 }}>
+                      {!logged
+                        ? <button onClick={() => { setDailyActive(id); setTab("dailycheckin"); }} style={{ flex:1, background:`rgba(${hexRgb(c?.color||"#FFD700")},0.1)`, border:`1px solid ${c?.color}44`, borderRadius:7, padding:"6px", fontSize:12, color:c?.color, cursor:"pointer", fontFamily:"Georgia,serif" }}>+ Check in</button>
+                        : <span style={{ fontSize:12, color:(c?.color||"#FFD700")+"aa", padding:"6px 0", flex:1 }}>✓ Logged</span>}
+                      <button onClick={() => { setActiveId(id); setTab("chat"); }} style={{ background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:7, padding:"6px 10px", fontSize:12, color:"#aaa", cursor:"pointer", fontFamily:"Georgia,serif" }}>Coach</button>
+                      <button onClick={() => { setActiveId(id); setTab("progress"); }} style={{ background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:7, padding:"6px 10px", fontSize:12, color:"#aaa", cursor:"pointer", fontFamily:"Georgia,serif" }}>History</button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           )}
+
+          {/* 180-Day Commitment card */}
           {(() => {
-            const totalLogs2 = doneIds.reduce((a, id) => a + (logs[id]?.length || 0), 0);
             if (vision) return (
               <div onClick={() => setTab("vision")} style={{ marginTop:26, display:"flex", alignItems:"center", gap:14, background:"rgba(255,215,0,0.05)", border:"1px solid rgba(255,215,0,0.15)", borderRadius:12, padding:"15px 20px", cursor:"pointer" }}>
                 <span style={{ fontSize:20, color:"#FFD700" }}>★</span>
-                <div><div style={{ fontSize:14, color:"#ddd" }}>Your Life Vision</div><div style={{ fontSize:12, color:"#666" }}>Click to view or regenerate</div></div>
+                <div><div style={{ fontSize:14, color:"#ddd" }}>Your 180-Day Commitment</div><div style={{ fontSize:12, color:"#666" }}>Click to view or regenerate</div></div>
                 <span style={{ marginLeft:"auto", color:"#FFD700" }}>→</span>
-              </div>
-            );
-            if (totalLogs2 >= 3) return (
-              <div style={{ marginTop:26, display:"flex", alignItems:"center", gap:14, background:"rgba(255,215,0,0.06)", border:"1px solid rgba(255,215,0,0.2)", borderRadius:12, padding:"18px 22px" }}>
-                <div><div style={{ fontSize:14, color:"#FFD700", marginBottom:4 }}>★ Your Life Vision is ready</div><div style={{ fontSize:13, color:"#666" }}>You've logged {totalLogs2} check-ins. You've earned this.</div></div>
-                <button onClick={() => { setTab("vision"); generateVision(); }} style={{ marginLeft:"auto", background:"#FFD700", color:"#000", border:"none", borderRadius:8, padding:"10px 20px", fontSize:14, fontFamily:"Georgia,serif", fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>Generate →</button>
               </div>
             );
             return (
               <div style={{ marginTop:26, background:"rgba(255,255,255,0.02)", border:"1px dashed rgba(255,255,255,0.08)", borderRadius:12, padding:"18px 22px", display:"flex", alignItems:"center", gap:14 }}>
                 <span style={{ fontSize:18, color:"#444" }}>★</span>
-                <div><div style={{ fontSize:14, color:"#555" }}>Life Vision unlocks after 3 check-ins</div><div style={{ fontSize:12, color:"#444", marginTop:2 }}>{totalLogs2}/3 done</div></div>
-                <div style={{ marginLeft:"auto", height:4, width:80, background:"rgba(255,255,255,0.06)", borderRadius:2, overflow:"hidden" }}><div style={{ height:"100%", width:`${Math.min(100,(totalLogs2/3)*100)}%`, background:"#FFD700", borderRadius:2 }} /></div>
+                <div><div style={{ fontSize:14, color:"#555" }}>Your 180-Day Commitment is waiting</div><div style={{ fontSize:12, color:"#444", marginTop:2 }}>Complete onboarding to generate it</div></div>
               </div>
             );
           })()}
@@ -1602,11 +1766,12 @@ export default function App() {
     }
 
     if (tab === "progress") {
-      const c = cat(activeId);
+      const c       = cat(activeId);
       const logList = logs[activeId] || [];
       const byMonth = {};
-      logList.forEach(l => { const m = l.date.slice(0,7); if (!byMonth[m]) byMonth[m] = []; byMonth[m].push(l); });
+      logList.forEach(l => { const m = l.date.slice(0,7); if (!byMonth[m]) byMonth[m]=[]; byMonth[m].push(l); });
       const s = sc(activeId);
+
       if (!activeId) return (
         <div style={{ padding:"60px 26px", textAlign:"center" }}>
           <div style={{ fontSize:40, marginBottom:16, color:"#333" }}>◎</div>
@@ -1615,20 +1780,117 @@ export default function App() {
           <button onClick={() => setTab("dashboard")} style={{ background:"rgba(255,215,0,0.1)", border:"1px solid rgba(255,215,0,0.2)", borderRadius:8, padding:"10px 20px", fontSize:14, color:"#FFD700", cursor:"pointer", fontFamily:"Georgia,serif" }}>Go to Dashboard</button>
         </div>
       );
+
       const streak = getStreak(logList);
-      const thisWeekLogs = logList.filter(l => { const d = new Date(l.date); const now = new Date(); const wAgo = new Date(now); wAgo.setDate(wAgo.getDate()-7); return d >= wAgo; });
-      const weekNet = thisWeekLogs.reduce((a, l) => a + l.delta, 0);
+      const thisWeekLogs = logList.filter(l => { const d = new Date(l.date); const wAgo = new Date(); wAgo.setDate(wAgo.getDate()-7); return d >= wAgo; });
+      const weekNet = thisWeekLogs.reduce((a,l) => a+l.delta, 0);
+
+      // Build 180-day score curve
+      const start180   = startDate ? new Date(startDate) : new Date();
+      const dayNumber  = Math.min(180, Math.max(1, Math.floor((new Date()-start180)/86400000)+1));
+      // Build a map of date → running score
+      const scoreByDay = {};
+      let running = 50;
+      const sortedLogs = [...logList].sort((a,b) => a.date.localeCompare(b.date));
+      sortedLogs.forEach(l => { running = Math.max(0,Math.min(100,running+l.delta)); scoreByDay[l.date] = running; });
+
+      // Sample points across 180 days for the curve (every 10 days)
+      const curvePoints = [];
+      for (let d = 0; d <= Math.min(dayNumber, 180); d += Math.max(1, Math.floor(dayNumber/18))) {
+        const dateD = new Date(start180); dateD.setDate(dateD.getDate()+d);
+        const ds = dateD.toISOString().slice(0,10);
+        // find closest score
+        const logsUpToD = sortedLogs.filter(l => l.date <= ds);
+        let sc180 = 50;
+        if (logsUpToD.length) {
+          sc180 = 50;
+          logsUpToD.forEach(l => { sc180 = Math.max(0,Math.min(100,sc180+l.delta)); });
+        }
+        curvePoints.push({ day: d, score: sc180 });
+      }
+      if (!curvePoints.find(p=>p.day===dayNumber)) {
+        curvePoints.push({ day: dayNumber, score: s });
+      }
+      curvePoints.sort((a,b)=>a.day-b.day);
+
       return (
         <div style={{ padding:"34px 26px", maxWidth:900, margin:"0 auto" }}>
           <button onClick={() => setTab("dashboard")} style={{ background:"none", border:"none", color:"#666", cursor:"pointer", fontSize:14, fontFamily:"Georgia,serif", padding:"0 0 18px", display:"block" }}>← Back</button>
-          <div style={{ display:"flex", alignItems:"center", gap:14, marginBottom:30 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:14, marginBottom:26 }}>
             <span style={{ color:c?.color, fontSize:28 }}>{c?.icon}</span>
-            <div><h2 style={{ fontSize:24, fontWeight:400, color:"#fff", margin:"0 0 4px" }}>{c?.name} Progress</h2><p style={{ color:"#888", fontSize:13, margin:0 }}>{goals[activeId]?.goal}</p></div>
-            <div style={{ marginLeft:"auto" }}><AnimatedRing pct={s} prevPct={undefined} color={c?.color||"#FFD700"} size={76} stroke={6} /></div>
+            <div>
+              <h2 style={{ fontSize:24, fontWeight:400, color:"#fff", margin:"0 0 4px" }}>{c?.name} Progress</h2>
+              <p style={{ color:"#888", fontSize:13, margin:0 }}>{goals[activeId]?.goal}</p>
+            </div>
+            <div style={{ marginLeft:"auto" }}><AnimatedRing pct={s} prevPct={undefined} color={c?.color||"#FFD700"} size={70} stroke={6} /></div>
           </div>
+
+          {/* 180-day score curve */}
+          <div style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(255,255,255,0.07)", borderRadius:16, padding:"22px 24px", marginBottom:20 }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
+              <div style={{ fontSize:12, color:"#666", letterSpacing:"0.1em", textTransform:"uppercase" }}>180-Day Score Curve</div>
+              <div style={{ fontSize:12, color:"#555" }}>Day {dayNumber} of 180</div>
+            </div>
+            {logList.length === 0 ? (
+              /* Empty state — flat line with start marker */
+              <div>
+                <div style={{ position:"relative", height:80, marginBottom:12 }}>
+                  <svg width="100%" height="80" style={{ overflow:"visible" }}>
+                    {/* Baseline at 50 */}
+                    <line x1="0" y1="40" x2="100%" y2="40" stroke="rgba(255,255,255,0.06)" strokeWidth="1" strokeDasharray="4,4" />
+                    {/* Start dot */}
+                    <circle cx="4" cy="40" r="5" fill={c?.color||"#FFD700"} opacity="0.6" />
+                    {/* Dashed future line */}
+                    <line x1="4" y1="40" x2="96%" y2="10" stroke={c?.color||"#FFD700"} strokeWidth="1.5" strokeDasharray="6,4" opacity="0.2" />
+                  </svg>
+                </div>
+                <div style={{ textAlign:"center", padding:"8px 0 4px" }}>
+                  <div style={{ fontSize:22, color:"#FFD700", marginBottom:6 }}>Day 0 · Score 50</div>
+                  <div style={{ fontSize:13, color:"#555" }}>Your 180-day journey starts today.</div>
+                  <div style={{ fontSize:12, color:"#444", marginTop:4, fontStyle:"italic" }}>Log your first check-in and watch this line move.</div>
+                  <button onClick={() => { setDailyActive(activeId); setTab("dailycheckin"); }}
+                    style={{ marginTop:16, background:"#FFD700", color:"#000", border:"none", borderRadius:9, padding:"10px 22px", fontSize:14, fontFamily:"Georgia,serif", fontWeight:700, cursor:"pointer" }}>
+                    Start First Check-in →
+                  </button>
+                </div>
+              </div>
+            ) : (
+              /* Real curve */
+              <div>
+                <div style={{ position:"relative", height:100 }}>
+                  <svg width="100%" height="100" viewBox={`0 0 ${Math.max(curvePoints.length-1,1)*40} 100`} preserveAspectRatio="none" style={{ overflow:"visible" }}>
+                    {/* Grid lines */}
+                    {[25,50,75].map(y => (
+                      <line key={y} x1="0" y1={100-y} x2="100%" y2={100-y} stroke="rgba(255,255,255,0.04)" strokeWidth="1" />
+                    ))}
+                    {/* Score line */}
+                    {curvePoints.length > 1 && (
+                      <polyline
+                        points={curvePoints.map((p,i) => `${i*40},${100-p.score}`).join(" ")}
+                        fill="none" stroke={c?.color||"#FFD700"} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+                    )}
+                    {/* Fill */}
+                    {curvePoints.length > 1 && (
+                      <polygon
+                        points={`0,100 ${curvePoints.map((p,i)=>`${i*40},${100-p.score}`).join(" ")} ${(curvePoints.length-1)*40},100`}
+                        fill={`rgba(${hexRgb(c?.color||"#FFD700")},0.08)`} />
+                    )}
+                    {/* Dots */}
+                    {curvePoints.map((p,i) => (
+                      <circle key={i} cx={i*40} cy={100-p.score} r="3.5" fill={c?.color||"#FFD700"} stroke="#080808" strokeWidth="1.5" />
+                    ))}
+                  </svg>
+                </div>
+                <div style={{ display:"flex", justifyContent:"space-between", fontSize:10, color:"#444", marginTop:6 }}>
+                  <span>Day 1</span><span>Day {Math.round(dayNumber/2)}</span><span>Day {dayNumber}</span>
+                </div>
+              </div>
+            )}
+          </div>
+
           {thisWeekLogs.length > 0 && (
-            <div style={{ background:"rgba(255,215,0,0.04)", border:"1px solid rgba(255,215,0,0.15)", borderRadius:14, padding:"18px 22px", marginBottom:22 }}>
-              <div style={{ fontSize:12, color:"#FFD700", letterSpacing:"0.12em", textTransform:"uppercase", marginBottom:12 }}>This Week</div>
+            <div style={{ background:"rgba(255,215,0,0.04)", border:"1px solid rgba(255,215,0,0.15)", borderRadius:14, padding:"16px 20px", marginBottom:18 }}>
+              <div style={{ fontSize:11, color:"#FFD700", letterSpacing:"0.12em", textTransform:"uppercase", marginBottom:10 }}>This Week</div>
               <div style={{ display:"flex", gap:24, flexWrap:"wrap" }}>
                 <div><div style={{ fontSize:20, color:weekNet>=0?"#7CE8A0":"#E87C7C" }}>{weekNet>=0?"+":""}{weekNet} pts</div><div style={{ fontSize:11, color:"#555" }}>net change</div></div>
                 <div><div style={{ fontSize:20, color:"#FFD700" }}>{thisWeekLogs.length}</div><div style={{ fontSize:11, color:"#555" }}>check-ins</div></div>
@@ -1636,15 +1898,10 @@ export default function App() {
               </div>
             </div>
           )}
-          {logList.length === 0 ? (
-            <div style={{ textAlign:"center", padding:"60px 0" }}>
-              <div style={{ fontSize:14, color:"#555", marginBottom:12 }}>No check-ins yet for this goal.</div>
-              <div style={{ fontSize:13, color:"#444", marginBottom:24 }}>30 days from now this page will tell your story. Start today.</div>
-              <button onClick={() => { setDailyActive(activeId); setTab("dailycheckin"); }} style={{ background:"#FFD700", color:"#000", border:"none", borderRadius:9, padding:"12px 24px", fontSize:14, fontFamily:"Georgia,serif", fontWeight:700, cursor:"pointer" }}>Start First Check-in →</button>
-            </div>
-          ) : (
+
+          {logList.length > 0 && (
             <>
-              <div style={{ display:"flex", gap:10, marginBottom:26, flexWrap:"wrap" }}>
+              <div style={{ display:"flex", gap:10, marginBottom:22, flexWrap:"wrap" }}>
                 {[{l:"Total Logs",v:logList.length},{l:"This Month",v:(byMonth[monthStr()]||[]).length},{l:"Streak",v:`${streak}d`},{l:"Best",v:`+${Math.max(...logList.map(l=>l.delta))}`},{l:"Avg Mood",v:`${(logList.reduce((a,l)=>a+l.mood,0)/logList.length).toFixed(1)}/5`}].map(st => (
                   <div key={st.l} style={{ background:"rgba(255,255,255,0.03)", border:"1px solid rgba(255,255,255,0.07)", borderRadius:12, padding:"14px 18px", flex:1, minWidth:80, textAlign:"center" }}>
                     <div style={{ fontSize:22, color:c?.color }}>{st.v}</div>
@@ -1658,7 +1915,7 @@ export default function App() {
                     <div style={{ fontSize:14, color:c?.color }}>{formatMonth(m)}</div>
                     <div style={{ fontSize:13, color:"#888" }}>{byMonth[m].length} logs · net {byMonth[m].reduce((a,l)=>a+l.delta,0)>=0?"+":""}{byMonth[m].reduce((a,l)=>a+l.delta,0)}</div>
                   </div>
-                  {byMonth[m].slice().reverse().map((l, i) => (
+                  {byMonth[m].slice().reverse().map((l,i) => (
                     <div key={i} style={{ display:"flex", gap:10, paddingBottom:8, marginBottom:8, borderBottom:"1px solid rgba(255,255,255,0.05)" }}>
                       <span style={{ fontSize:12, color:"#666", whiteSpace:"nowrap", minWidth:48 }}>{l.date.slice(5)}</span>
                       <span style={{ fontSize:12, color:l.delta>=0?"#7CE8A0":"#E87C7C", whiteSpace:"nowrap" }}>{l.delta>=0?"+":""}{l.delta}</span>
@@ -1735,8 +1992,8 @@ export default function App() {
         <div style={{ padding:"34px 26px", maxWidth:900, margin:"0 auto" }}>
           <div style={{ textAlign:"center", marginBottom:36 }}>
             <div style={{ fontSize:42, color:"#FFD700" }}>★</div>
-            <h2 style={{ fontSize:28, fontWeight:400, color:"#fff", margin:"12px 0 6px" }}>{userName}'s Life Vision</h2>
-            <p style={{ color:"#666", fontSize:14, margin:0 }}>{doneIds.length} goals · {doneIds.reduce((a, id) => a + (logs[id]?.length || 0), 0)} check-ins</p>
+            <h2 style={{ fontSize:28, fontWeight:400, color:"#fff", margin:"12px 0 6px" }}>{userName}'s 180-Day Commitment</h2>
+            <p style={{ color:"#666", fontSize:14, margin:0 }}>Day {Math.min(180,Math.max(1,Math.floor((new Date()-(startDate?new Date(startDate):new Date()))/86400000)+1))} of 180 · {doneIds.length} goals</p>
           </div>
           {visionLoading && (
             <div style={{ textAlign:"center", padding:"60px 0" }}>
@@ -1744,15 +2001,34 @@ export default function App() {
               <p style={{ color:"#888", marginTop:18 }}>Weaving your vision...</p>
             </div>
           )}
-          {!visionLoading && vision && (
-            <div style={{ background:"rgba(255,215,0,0.03)", border:"1px solid rgba(255,215,0,0.12)", borderRadius:16, padding:"30px 36px", marginBottom:28 }}>
-              {vision.split("\n").filter(l=>l.trim()).map((line,i) => (
-                <p key={i} style={{ fontSize:16, lineHeight:1.85, margin:"0 0 14px", color:line.startsWith("Your one commitment")?"#FFD700":"#ddd", fontStyle:line.startsWith("Your one commitment")?"italic":"normal" }}>{line}</p>
-              ))}
-            </div>
-          )}
+          {!visionLoading && vision && (() => {
+            const lines = vision.split("\n").filter(l=>l.trim());
+            return (
+              <div style={{ display:"flex", flexDirection:"column", gap:12, marginBottom:28 }}>
+                {doneIds.map((id, i) => {
+                  const c    = cat(id);
+                  const line = lines[i] || vision.split("\n").filter(l=>l.trim())[i] || "";
+                  return (
+                    <div key={id} style={{ display:"flex", gap:16, alignItems:"flex-start", background:`rgba(${hexRgb(c?.color||"#FFD700")},0.07)`, border:`1px solid ${c?.color}44`, borderRadius:16, padding:"20px 22px" }}>
+                      <div style={{ width:46, height:46, borderRadius:12, background:`rgba(${hexRgb(c?.color||"#FFD700")},0.15)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, flexShrink:0, color:c?.color }}>
+                        {c?.icon}
+                      </div>
+                      <div style={{ flex:1 }}>
+                        <div style={{ fontSize:11, color:c?.color, letterSpacing:"0.1em", textTransform:"uppercase", marginBottom:6 }}>{c?.name}</div>
+                        <div style={{ fontSize:16, color:"#fff", lineHeight:1.65, fontStyle:"italic" }}>{line}</div>
+                        {goals[id]?.why && <div style={{ fontSize:12, color:"#555", marginTop:8, paddingTop:8, borderTop:"1px solid rgba(255,255,255,0.06)" }}>Why: {goals[id].why}</div>}
+                      </div>
+                    </div>
+                  );
+                })}
+                {lines.length > doneIds.length && lines.slice(doneIds.length).map((line,i) => (
+                  <p key={i} style={{ fontSize:15, lineHeight:1.8, color:"#FFD700", fontStyle:"italic", margin:0, paddingLeft:4 }}>{line}</p>
+                ))}
+              </div>
+            );
+          })()}
           <div style={{ display:"flex", gap:10, marginBottom:28 }}>
-            <button onClick={generateVision} style={{ background:"#FFD700", color:"#000", border:"none", borderRadius:9, padding:"12px 22px", fontSize:14, fontFamily:"Georgia,serif", fontWeight:700, cursor:"pointer" }}>{vision?"Regenerate":"Generate"} Vision</button>
+            <button onClick={generateVision} style={{ background:"#FFD700", color:"#000", border:"none", borderRadius:9, padding:"12px 22px", fontSize:14, fontFamily:"Georgia,serif", fontWeight:700, cursor:"pointer" }}>{vision?"Regenerate":"Generate"} 180-Day Commitment</button>
             {vision && <button onClick={() => navigator.clipboard?.writeText(vision)} style={{ background:"transparent", border:"1px solid rgba(255,255,255,0.15)", borderRadius:9, padding:"12px 18px", fontSize:14, color:"#aaa", cursor:"pointer", fontFamily:"Georgia,serif" }}>Copy</button>}
           </div>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
