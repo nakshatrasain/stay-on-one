@@ -266,6 +266,13 @@ function Onboarding({ userId, onComplete }) {
     else if (picked.length < 3) setPicked([...picked, id]);
   };
 
+  // MUST be at top level — hooks cannot be after conditional returns
+  useEffect(() => {
+    if (step === 4 && !commitment && !commitLoading) {
+      generateCommitment();
+    }
+  }, [step]);
+
   // Pre-fill why suggestions when entering step 4
   const enterGoalStep = () => {
     const prefilled = {};
@@ -476,13 +483,6 @@ Rules:
       </div>
     );
   }
-
-  // Auto-generate commitment when reaching step 4
-  useEffect(() => {
-    if (step === 4 && !commitment && !commitLoading) {
-      generateCommitment();
-    }
-  }, [step]);
 
   // ── Step 4: 180-Day Commitment ────────────────────────────────────────────────
   if (step === 4) {
