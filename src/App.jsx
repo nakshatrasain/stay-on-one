@@ -477,10 +477,15 @@ Rules:
     );
   }
 
+  // Auto-generate commitment when reaching step 4
+  useEffect(() => {
+    if (step === 4 && !commitment && !commitLoading) {
+      generateCommitment();
+    }
+  }, [step]);
+
   // ── Step 4: 180-Day Commitment ────────────────────────────────────────────────
   if (step === 4) {
-    // Auto-generate on mount
-    useEffect(() => { if (!commitment && !commitLoading) generateCommitment(); }, []);
 
     return (
       <div style={BG}>
@@ -576,7 +581,6 @@ Rules:
 
 // ─── LANDING PAGE ────────────────────────────────────────────────────────────
 function LandingPage({ onEnter }) {
-  const [nameInput, setNameInput] = useState("");
   const [showName, setShowName] = useState(false);
   const [animatedPcts, setAnimatedPcts] = useState([0, 0, 0, 0]);
   const [curveVisible, setCurveVisible] = useState(false);
@@ -692,16 +696,13 @@ function LandingPage({ onEnter }) {
     );
   };
 
-  const NameInput = () => (
-    <div style={{ display: "flex", gap: 10, maxWidth: 420, margin: "0 auto" }}>
-      <input autoFocus value={nameInput} onChange={e => setNameInput(e.target.value)}
-        onKeyDown={e => e.key === "Enter" && nameInput.trim() && onEnter(nameInput.trim())}
-        placeholder="What's your name?"
-        style={{ flex: 1, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 10, padding: "14px 18px", fontSize: 16, color: "#fff", fontFamily: "Georgia,serif", outline: "none" }} />
-      <button onClick={() => nameInput.trim() && onEnter(nameInput.trim())} disabled={!nameInput.trim()}
-        style={{ background: nameInput.trim() ? "#FFD700" : "rgba(255,215,0,0.2)", color: nameInput.trim() ? "#000" : "#666", border: "none", borderRadius: 10, padding: "14px 24px", fontSize: 16, fontFamily: "Georgia,serif", fontWeight: 700, cursor: nameInput.trim() ? "pointer" : "default", transition: "all 0.2s" }}>
-        Begin
+  const GetStartedBtn = () => (
+    <div style={{ maxWidth: 420, margin: "0 auto" }}>
+      <button onClick={() => onEnter()}
+        style={{ width: "100%", background: "#FFD700", color: "#000", border: "none", borderRadius: 10, padding: "16px 24px", fontSize: 17, fontFamily: "Georgia,serif", fontWeight: 700, cursor: "pointer", transition: "all 0.2s" }}>
+        Get Started — It's Free →
       </button>
+      <div style={{ fontSize: 12, color: "#444", marginTop: 10, textAlign: "center" }}>Already have an account? <span onClick={() => onEnter()} style={{ color: "#FFD700", cursor: "pointer" }}>Log in →</span></div>
     </div>
   );
 
@@ -755,9 +756,9 @@ function LandingPage({ onEnter }) {
                 Meet your accountability partner →
               </button>
             ) : (
-              <NameInput />
+              <GetStartedBtn />
             )}
-            <div style={{ fontSize: 12, color: "#444", marginTop: 16 }}>Free · Private · No sign-up required · Your data stays on your device</div>
+            <div style={{ fontSize: 12, color: "#444", marginTop: 16 }}>Free · Private · Your data syncs across all devices</div>
           </div>
           {/* Right — animated rings */}
           <div style={{ display: "flex", flexDirection: "column", gap: 20, animation: "fadeUp 0.8s ease 0.2s both" }}>
@@ -1044,9 +1045,9 @@ function LandingPage({ onEnter }) {
               Begin today →
             </button>
           ) : (
-            <NameInput />
+            <GetStartedBtn />
           )}
-          <div style={{ fontSize: 12, color: "#444", marginTop: 18 }}>Free · Private · No sign-up required · Your data stays on your device</div>
+          <div style={{ fontSize: 12, color: "#444", marginTop: 18 }}>Free · Private · Your data syncs across all devices</div>
         </div>
       </div>
 
@@ -1193,19 +1194,40 @@ function Coach({ userName, goals, scores, logs, lifeVision, currentPage }) {
 
 // ─── NAV ─────────────────────────────────────────────────────────────────────
 function Nav({ tab, setTab, hasGoals, userName, onSignOut }) {
+  const [showMenu, setShowMenu] = useState(false);
   const items = hasGoals
-    ? [["dashboard","Dashboard"],["dailycheckin","Daily Check-in"],["progress","Progress"],["vision","Vision"],["setup","Goals"]]
+    ? [["dashboard","Dashboard"],["dailycheckin","Check-in"],["progress","Progress"],["vision","Commitment"],["setup","Goals"]]
     : [["setup","Goals"]];
   return (
-    <div style={{ position: "sticky", top: 0, zIndex: 100, height: 58, display: "flex", alignItems: "center", padding: "0 26px", gap: 4, background: "rgba(8,8,8,0.94)", backdropFilter: "blur(16px)", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
-      <span style={{ color: "#FFD700", fontSize: 17, marginRight: 14 }}>★</span>
-      <span style={{ fontSize: 15, color: "#fff", fontFamily: "Georgia,serif", marginRight: 22, whiteSpace: "nowrap" }}>Stay on One</span>
+    <div style={{ position: "sticky", top: 0, zIndex: 100, height: 58, display: "flex", alignItems: "center", padding: "0 20px", gap: 4, background: "rgba(8,8,8,0.96)", backdropFilter: "blur(16px)", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
+      <span style={{ color: "#FFD700", fontSize: 17, marginRight: 10 }}>★</span>
+      <span style={{ fontSize: 14, color: "#fff", fontFamily: "Georgia,serif", marginRight: 18, whiteSpace: "nowrap" }}>Stay on One</span>
       {items.map(([id, label]) => (
-        <button key={id} onClick={() => setTab(id)} style={{ background: "none", border: "none", borderBottom: tab === id ? "2px solid #FFD700" : "2px solid transparent", color: tab === id ? "#FFD700" : "#666", cursor: "pointer", fontSize: 13, fontFamily: "Georgia,serif", padding: "4px 10px", transition: "color 0.15s" }}>
+        <button key={id} onClick={() => setTab(id)}
+          style={{ background: "none", border: "none", borderBottom: tab === id ? "2px solid #FFD700" : "2px solid transparent", color: tab === id ? "#FFD700" : "#666", cursor: "pointer", fontSize: 13, fontFamily: "Georgia,serif", padding: "4px 10px", transition: "color 0.15s", whiteSpace: "nowrap" }}>
           {label}
         </button>
       ))}
-      <div style={{ marginLeft: "auto", fontSize: 13, color: "#444" }}>{userName}</div>
+      {/* User menu */}
+      <div style={{ marginLeft: "auto", position: "relative" }}>
+        <button onClick={() => setShowMenu(m => !m)}
+          style={{ display: "flex", alignItems: "center", gap: 8, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 20, padding: "6px 14px", cursor: "pointer", fontFamily: "Georgia,serif" }}>
+          <div style={{ width: 22, height: 22, borderRadius: "50%", background: "linear-gradient(135deg,#FFD700,#FF9500)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: "#000", fontWeight: 700 }}>
+            {userName?.charAt(0)?.toUpperCase() || "?"}
+          </div>
+          <span style={{ fontSize: 13, color: "#ccc" }}>{userName}</span>
+          <span style={{ fontSize: 10, color: "#555" }}>▾</span>
+        </button>
+        {showMenu && (
+          <div style={{ position: "absolute", top: "calc(100% + 8px)", right: 0, background: "#111", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 12, padding: "6px", minWidth: 160, zIndex: 200, boxShadow: "0 8px 32px rgba(0,0,0,0.6)" }}>
+            <div style={{ padding: "8px 14px", fontSize: 12, color: "#555", borderBottom: "1px solid rgba(255,255,255,0.07)", marginBottom: 4 }}>{userName}</div>
+            <button onClick={() => { setShowMenu(false); onSignOut && onSignOut(); }}
+              style={{ width: "100%", background: "none", border: "none", borderRadius: 8, padding: "9px 14px", fontSize: 13, color: "#E87C7C", cursor: "pointer", fontFamily: "Georgia,serif", textAlign: "left" }}>
+              Sign out
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
